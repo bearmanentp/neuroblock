@@ -1,0 +1,12 @@
+{
+  "name": "tibo",
+  "version": "1.0.0",
+  "private": false,
+  "description": "TiBo Blockly-based web IDE for Pico and Arduino",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "blockly": "^12.5.1"
+  }
+}
