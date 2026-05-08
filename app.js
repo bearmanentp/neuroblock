@@ -82,7 +82,11 @@
   document.addEventListener("DOMContentLoaded", init);
 
   function init() {
-    bootBlockly();
+    try {
+      bootBlockly();
+    } catch (error) {
+      showBlocklyError(error);
+    }
     bindEvents();
     restoreSession();
     renderAll();
@@ -98,11 +102,17 @@
 
     if (state.language === "ko") Blockly.setLocale(Blockly.Msg.ko || Blockly.Msg);
     localizeToolbox();
-    if (window.NeuroBlockRuntime?.register) {
-      window.NeuroBlockRuntime.register(Blockly, python.pythonGenerator, state.language);
-    } else {
-      defineCustomBlocks();
+    try {
+      if (window.NeuroBlockRuntime?.register) {
+        window.NeuroBlockRuntime.register(Blockly, python.pythonGenerator, state.language);
+      } else {
+        defineCustomBlocks();
+      }
+    } catch (error) {
+      console.error(error);
+      log(`커스텀 블록 등록 오류: ${error.message || error}`);
     }
+    pruneUnavailableToolboxBlocks();
 
     state.blocklyWorkspace = Blockly.inject("blocklyDiv", {
       toolbox: document.getElementById("toolbox"),
@@ -121,6 +131,22 @@
     window.addEventListener("resize", () => Blockly.svgResize(state.blocklyWorkspace));
     loadStarterBlocks();
     updateCodePreviewFromBlocks();
+  }
+
+  function pruneUnavailableToolboxBlocks() {
+    document.querySelectorAll("#toolbox block[type]").forEach((block) => {
+      const type = block.getAttribute("type");
+      if (type && !Blockly.Blocks[type]) block.remove();
+    });
+  }
+
+  function showBlocklyError(error) {
+    console.error(error);
+    const host = document.getElementById("blocklyDiv");
+    if (host) {
+      host.innerHTML = `<div class="blockly-error">Blockly 초기화 오류: ${escapeHtml(error.message || String(error))}</div>`;
+    }
+    log(`Blockly 초기화 오류: ${error.message || error}`);
   }
 
   function loadStarterBlocks() {
