@@ -1,22 +1,32 @@
 (function () {
-  function register(Blockly, pythonGenerator) {
+  function register(Blockly, pythonGenerator, language = "ko") {
+    const t = getMessages(language);
     Blockly.defineBlocksWithJsonArray([
-      { type: "pico_print", message0: "print %1", args0: [{ type: "input_value", name: "TEXT" }], previousStatement: null, nextStatement: null, colour: 20 },
-      { type: "pico_sleep_ms", message0: "%1 ms wait", args0: [{ type: "input_value", name: "MS", check: "Number" }], previousStatement: null, nextStatement: null, colour: 20 },
-      { type: "pico_led_write", message0: "builtin LED %1", args0: [{ type: "field_dropdown", name: "STATE", options: [["on", "ON"], ["off", "OFF"], ["toggle", "TOGGLE"]] }], previousStatement: null, nextStatement: null, colour: 0 },
-      { type: "pico_relay_write", message0: "relay pin %1 %2", args0: [{ type: "input_value", name: "PIN", check: "Number" }, { type: "field_dropdown", name: "VALUE", options: [["on", "1"], ["off", "0"]] }], previousStatement: null, nextStatement: null, colour: 0 },
-      { type: "pico_pin_write_digital", message0: "digital write pin %1 value %2", args0: [{ type: "input_value", name: "PIN", check: "Number" }, { type: "field_dropdown", name: "VALUE", options: [["HIGH", "1"], ["LOW", "0"]] }], previousStatement: null, nextStatement: null, colour: 330 },
-      { type: "pico_pin_read_digital", message0: "digital read pin %1", args0: [{ type: "input_value", name: "PIN", check: "Number" }], output: "Number", colour: 330 },
-      { type: "pico_button_read", message0: "button read pin %1", args0: [{ type: "input_value", name: "PIN", check: "Number" }], output: "Number", colour: 330 },
-      { type: "pico_pwm_write", message0: "PWM pin %1 freq %2 duty %3", args0: [{ type: "input_value", name: "PIN", check: "Number" }, { type: "input_value", name: "FREQ", check: "Number" }, { type: "input_value", name: "DUTY", check: "Number" }], previousStatement: null, nextStatement: null, colour: 200 },
-      { type: "pico_rgb_write", message0: "RGB pins R %1 G %2 B %3 values %4 %5 %6", args0: [{ type: "input_value", name: "R_PIN", check: "Number" }, { type: "input_value", name: "G_PIN", check: "Number" }, { type: "input_value", name: "B_PIN", check: "Number" }, { type: "input_value", name: "R_VAL", check: "Number" }, { type: "input_value", name: "G_VAL", check: "Number" }, { type: "input_value", name: "B_VAL", check: "Number" }], previousStatement: null, nextStatement: null, colour: 130 },
-      { type: "pico_neopixel_write", message0: "NeoPixel pin %1 count %2 index %3 color %4 %5 %6", args0: [{ type: "input_value", name: "PIN", check: "Number" }, { type: "input_value", name: "COUNT", check: "Number" }, { type: "input_value", name: "INDEX", check: "Number" }, { type: "input_value", name: "R", check: "Number" }, { type: "input_value", name: "G", check: "Number" }, { type: "input_value", name: "B", check: "Number" }], previousStatement: null, nextStatement: null, colour: 130 },
-      { type: "pico_servo_write", message0: "servo pin %1 angle %2", args0: [{ type: "input_value", name: "PIN", check: "Number" }, { type: "input_value", name: "ANGLE", check: "Number" }], previousStatement: null, nextStatement: null, colour: 200 },
-      { type: "pico_adc_read", message0: "ADC read pin %1", args0: [{ type: "input_value", name: "PIN", check: "Number" }], output: "Number", colour: 170 },
-      { type: "pico_ultrasonic_read", message0: "ultrasonic trig %1 echo %2", args0: [{ type: "input_value", name: "TRIG", check: "Number" }, { type: "input_value", name: "ECHO", check: "Number" }], output: "Number", colour: 170 },
-      { type: "pico_read_temperature", message0: "read onboard temperature", output: "Number", colour: 170 },
-      { type: "pico_buzzer_tone", message0: "buzzer pin %1 freq %2 Hz duration %3 ms", args0: [{ type: "input_value", name: "PIN", check: "Number" }, { type: "input_value", name: "FREQ", check: "Number" }, { type: "input_value", name: "DURATION", check: "Number" }], previousStatement: null, nextStatement: null, colour: 45 },
-      { type: "pico_map_value", message0: "map %1 from %2 - %3 to %4 - %5", args0: [{ type: "input_value", name: "VALUE", check: "Number" }, { type: "input_value", name: "IN_MIN", check: "Number" }, { type: "input_value", name: "IN_MAX", check: "Number" }, { type: "input_value", name: "OUT_MIN", check: "Number" }, { type: "input_value", name: "OUT_MAX", check: "Number" }], output: "Number", colour: 170 }
+      { type: "pico_print", message0: t.print, args0: [{ type: "input_value", name: "TEXT" }], previousStatement: null, nextStatement: null, colour: 20 },
+      { type: "pico_sleep_ms", message0: t.sleepMs, args0: [{ type: "input_value", name: "MS", check: "Number" }], previousStatement: null, nextStatement: null, colour: 20 },
+      { type: "pico_led_write", message0: t.ledBuiltin, args0: [{ type: "field_dropdown", name: "STATE", options: t.onOffToggle }] , previousStatement: null, nextStatement: null, colour: 0 },
+      { type: "pico_led_easy", message0: t.ledEasy, args0: [{ type: "field_dropdown", name: "STATE", options: t.onOffToggle }] , previousStatement: null, nextStatement: null, colour: 0 },
+      { type: "pico_led_blink", message0: t.ledBlink, args0: [{ type: "input_value", name: "TIMES", check: "Number" }, { type: "input_value", name: "MS", check: "Number" }], previousStatement: null, nextStatement: null, colour: 0 },
+      { type: "pico_led_pin", message0: t.ledPin, args0: [{ type: "input_value", name: "PIN", check: "Number" }, { type: "field_dropdown", name: "STATE", options: t.onOff }] , previousStatement: null, nextStatement: null, colour: 0 },
+      { type: "pico_led_brightness", message0: t.ledBrightness, args0: [{ type: "input_value", name: "PIN", check: "Number" }, { type: "input_value", name: "BRIGHTNESS", check: "Number" }], previousStatement: null, nextStatement: null, colour: 0 },
+      { type: "pico_relay_write", message0: t.relay, args0: [{ type: "input_value", name: "PIN", check: "Number" }, { type: "field_dropdown", name: "VALUE", options: t.onOffValue }] , previousStatement: null, nextStatement: null, colour: 0 },
+      { type: "pico_answer_text", message0: t.answerText, args0: [{ type: "input_value", name: "PROMPT" }], output: "String", colour: 265 },
+      { type: "pico_answer_number", message0: t.answerNumber, args0: [{ type: "input_value", name: "PROMPT" }], output: "Number", colour: 265 },
+      { type: "pico_pin_write_digital", message0: t.digitalWrite, args0: [{ type: "input_value", name: "PIN", check: "Number" }, { type: "field_dropdown", name: "VALUE", options: [["HIGH", "1"], ["LOW", "0"]] }], previousStatement: null, nextStatement: null, colour: 330 },
+      { type: "pico_pin_read_digital", message0: t.digitalRead, args0: [{ type: "input_value", name: "PIN", check: "Number" }], output: "Number", colour: 330 },
+      { type: "pico_button_read", message0: t.buttonRead, args0: [{ type: "input_value", name: "PIN", check: "Number" }], output: "Number", colour: 330 },
+      { type: "pico_wait_button", message0: t.waitButton, args0: [{ type: "input_value", name: "PIN", check: "Number" }], previousStatement: null, nextStatement: null, colour: 330 },
+      { type: "pico_pwm_write", message0: t.pwm, args0: [{ type: "input_value", name: "PIN", check: "Number" }, { type: "input_value", name: "FREQ", check: "Number" }, { type: "input_value", name: "DUTY", check: "Number" }], previousStatement: null, nextStatement: null, colour: 200 },
+      { type: "pico_rgb_write", message0: t.rgb, args0: [{ type: "input_value", name: "R_PIN", check: "Number" }, { type: "input_value", name: "G_PIN", check: "Number" }, { type: "input_value", name: "B_PIN", check: "Number" }, { type: "input_value", name: "R_VAL", check: "Number" }, { type: "input_value", name: "G_VAL", check: "Number" }, { type: "input_value", name: "B_VAL", check: "Number" }], previousStatement: null, nextStatement: null, colour: 130 },
+      { type: "pico_neopixel_write", message0: t.neopixel, args0: [{ type: "input_value", name: "PIN", check: "Number" }, { type: "input_value", name: "COUNT", check: "Number" }, { type: "input_value", name: "INDEX", check: "Number" }, { type: "input_value", name: "R", check: "Number" }, { type: "input_value", name: "G", check: "Number" }, { type: "input_value", name: "B", check: "Number" }], previousStatement: null, nextStatement: null, colour: 130 },
+      { type: "pico_servo_write", message0: t.servo, args0: [{ type: "input_value", name: "PIN", check: "Number" }, { type: "input_value", name: "ANGLE", check: "Number" }], previousStatement: null, nextStatement: null, colour: 200 },
+      { type: "pico_adc_read", message0: t.adc, args0: [{ type: "input_value", name: "PIN", check: "Number" }], output: "Number", colour: 170 },
+      { type: "pico_adc_percent", message0: t.adcPercent, args0: [{ type: "input_value", name: "PIN", check: "Number" }], output: "Number", colour: 170 },
+      { type: "pico_ultrasonic_read", message0: t.ultrasonic, args0: [{ type: "input_value", name: "TRIG", check: "Number" }, { type: "input_value", name: "ECHO", check: "Number" }], output: "Number", colour: 170 },
+      { type: "pico_read_temperature", message0: t.temperature, output: "Number", colour: 170 },
+      { type: "pico_random_int", message0: t.randomInt, args0: [{ type: "input_value", name: "MIN", check: "Number" }, { type: "input_value", name: "MAX", check: "Number" }], output: "Number", colour: 170 },
+      { type: "pico_buzzer_tone", message0: t.buzzer, args0: [{ type: "input_value", name: "PIN", check: "Number" }, { type: "input_value", name: "FREQ", check: "Number" }, { type: "input_value", name: "DURATION", check: "Number" }], previousStatement: null, nextStatement: null, colour: 45 },
+      { type: "pico_map_value", message0: t.map, args0: [{ type: "input_value", name: "VALUE", check: "Number" }, { type: "input_value", name: "IN_MIN", check: "Number" }, { type: "input_value", name: "IN_MAX", check: "Number" }, { type: "input_value", name: "OUT_MIN", check: "Number" }, { type: "input_value", name: "OUT_MAX", check: "Number" }], output: "Number", colour: 170 }
     ]);
 
     const py = pythonGenerator;
@@ -30,6 +40,26 @@
       generator.definitions_.builtin_led = "led = Pin('LED', Pin.OUT)";
       const mode = block.getFieldValue("STATE");
       return mode === "ON" ? "led.value(1)\n" : mode === "OFF" ? "led.value(0)\n" : "led.toggle()\n";
+    };
+    py.forBlock.pico_led_easy = py.forBlock.pico_led_write;
+    py.forBlock.pico_led_blink = (block, generator) => {
+      ensureMachine(generator);
+      generator.definitions_.import_utime = "from utime import sleep_ms";
+      generator.definitions_.builtin_led = "led = Pin('LED', Pin.OUT)";
+      const times = generator.valueToCode(block, "TIMES", 0) || "5";
+      const ms = generator.valueToCode(block, "MS", 0) || "300";
+      return `for _ in range(${times}):\n    led.value(1)\n    sleep_ms(${ms})\n    led.value(0)\n    sleep_ms(${ms})\n`;
+    };
+    py.forBlock.pico_led_pin = (block, generator) => {
+      ensureMachine(generator);
+      const pin = generator.valueToCode(block, "PIN", 0) || "15";
+      return `Pin(${pin}, Pin.OUT).value(${block.getFieldValue("STATE")})\n`;
+    };
+    py.forBlock.pico_led_brightness = (block, generator) => {
+      ensureMachine(generator);
+      const pin = generator.valueToCode(block, "PIN", 0) || "15";
+      const brightness = generator.valueToCode(block, "BRIGHTNESS", 0) || "50";
+      return `led_pwm = PWM(Pin(${pin}))\nled_pwm.freq(1000)\nled_pwm.duty_u16(int(max(0, min(100, ${brightness})) * 65535 / 100))\n`;
     };
     py.forBlock.pico_relay_write = (block, generator) => {
       ensureMachine(generator);
@@ -50,6 +80,19 @@
       ensureMachine(generator);
       const pin = generator.valueToCode(block, "PIN", 0) || "14";
       return [`Pin(${pin}, Pin.IN, Pin.PULL_UP).value()`, 0];
+    };
+    py.forBlock.pico_wait_button = (block, generator) => {
+      ensureMachine(generator);
+      const pin = generator.valueToCode(block, "PIN", 0) || "14";
+      return `while Pin(${pin}, Pin.IN, Pin.PULL_UP).value():\n    pass\n`;
+    };
+    py.forBlock.pico_answer_text = (block, generator) => {
+      const prompt = generator.valueToCode(block, "PROMPT", 0) || "''";
+      return [`input(${prompt})`, 0];
+    };
+    py.forBlock.pico_answer_number = (block, generator) => {
+      const prompt = generator.valueToCode(block, "PROMPT", 0) || "''";
+      return [`float(input(${prompt}))`, 0];
     };
     py.forBlock.pico_pwm_write = (block, generator) => {
       ensureMachine(generator);
@@ -90,6 +133,11 @@
       const pin = generator.valueToCode(block, "PIN", 0) || "26";
       return [`ADC(Pin(${pin})).read_u16()`, 0];
     };
+    py.forBlock.pico_adc_percent = (block, generator) => {
+      ensureMachine(generator);
+      const pin = generator.valueToCode(block, "PIN", 0) || "26";
+      return [`ADC(Pin(${pin})).read_u16() * 100 / 65535`, 0];
+    };
     py.forBlock.pico_ultrasonic_read = (block, generator) => {
       ensureMachine(generator);
       generator.definitions_.import_utime = "from utime import sleep_ms, sleep_us, ticks_us, ticks_diff";
@@ -121,6 +169,12 @@
       ensureMachine(generator);
       return ["27 - (((ADC(4).read_u16() * 3.3 / 65535) - 0.706) / 0.001721)", 0];
     };
+    py.forBlock.pico_random_int = (block, generator) => {
+      generator.definitions_.import_random = "import random";
+      const min = generator.valueToCode(block, "MIN", 0) || "1";
+      const max = generator.valueToCode(block, "MAX", 0) || "10";
+      return [`random.randint(${min}, ${max})`, 0];
+    };
     py.forBlock.pico_buzzer_tone = (block, generator) => {
       ensureMachine(generator);
       generator.definitions_.import_utime = "from utime import sleep_ms";
@@ -137,6 +191,70 @@
       const outMax = generator.valueToCode(block, "OUT_MAX", 0) || "255";
       return [`(${outMin} + ((${value} - ${inMin}) * (${outMax} - ${outMin}) / (${inMax} - ${inMin})))`, 0];
     };
+  }
+
+  function getMessages(language) {
+    const ko = {
+      print: "출력하기 %1",
+      sleepMs: "%1 ms 기다리기",
+      ledBuiltin: "내장 LED %1",
+      ledEasy: "LED 쉽게 %1",
+      ledBlink: "LED %1 번 깜빡이기 간격 %2 ms",
+      ledPin: "LED 핀 %1 %2",
+      ledBrightness: "LED 핀 %1 밝기 %2 %",
+      relay: "릴레이 핀 %1 %2",
+      answerText: "답받기 글자 질문 %1",
+      answerNumber: "답받기 숫자 질문 %1",
+      digitalWrite: "디지털 핀 %1 값 %2",
+      digitalRead: "디지털 핀 %1 읽기",
+      buttonRead: "버튼 핀 %1 읽기",
+      waitButton: "버튼 핀 %1 눌릴 때까지 기다리기",
+      pwm: "PWM 핀 %1 주파수 %2 밝기값 %3",
+      rgb: "RGB 핀 R %1 G %2 B %3 값 %4 %5 %6",
+      neopixel: "NeoPixel 핀 %1 개수 %2 번호 %3 색 %4 %5 %6",
+      servo: "서보 핀 %1 각도 %2",
+      adc: "아날로그 핀 %1 읽기",
+      adcPercent: "아날로그 핀 %1 퍼센트",
+      ultrasonic: "초음파 trig %1 echo %2 거리",
+      temperature: "보드 온도 읽기",
+      randomInt: "랜덤 정수 %1 부터 %2",
+      buzzer: "부저 핀 %1 주파수 %2 Hz 시간 %3 ms",
+      map: "값 %1 을 %2 - %3 에서 %4 - %5 로 바꾸기",
+      onOffToggle: [["켜기", "ON"], ["끄기", "OFF"], ["토글", "TOGGLE"]],
+      onOff: [["켜기", "1"], ["끄기", "0"]],
+      onOffValue: [["켜기", "1"], ["끄기", "0"]]
+    };
+    const en = {
+      print: "print %1",
+      sleepMs: "wait %1 ms",
+      ledBuiltin: "built-in LED %1",
+      ledEasy: "easy LED %1",
+      ledBlink: "blink LED %1 times every %2 ms",
+      ledPin: "LED pin %1 %2",
+      ledBrightness: "LED pin %1 brightness %2 %",
+      relay: "relay pin %1 %2",
+      answerText: "ask answer text %1",
+      answerNumber: "ask answer number %1",
+      digitalWrite: "digital write pin %1 value %2",
+      digitalRead: "digital read pin %1",
+      buttonRead: "button read pin %1",
+      waitButton: "wait until button pin %1 is pressed",
+      pwm: "PWM pin %1 freq %2 duty %3",
+      rgb: "RGB pins R %1 G %2 B %3 values %4 %5 %6",
+      neopixel: "NeoPixel pin %1 count %2 index %3 color %4 %5 %6",
+      servo: "servo pin %1 angle %2",
+      adc: "ADC read pin %1",
+      adcPercent: "ADC percent pin %1",
+      ultrasonic: "ultrasonic trig %1 echo %2",
+      temperature: "read onboard temperature",
+      randomInt: "random integer from %1 to %2",
+      buzzer: "buzzer pin %1 freq %2 Hz duration %3 ms",
+      map: "map %1 from %2 - %3 to %4 - %5",
+      onOffToggle: [["on", "ON"], ["off", "OFF"], ["toggle", "TOGGLE"]],
+      onOff: [["on", "1"], ["off", "0"]],
+      onOffValue: [["on", "1"], ["off", "0"]]
+    };
+    return language === "en" ? en : ko;
   }
 
   function ensureMachine(generator) {
@@ -203,6 +321,7 @@
         code = `delay(${emitValue(block.getInputTargetBlock("MS"), ctx) || "100"});\n`;
         break;
       case "pico_led_write":
+      case "pico_led_easy":
         ctx.setup.add("pinMode(LED_BUILTIN, OUTPUT);");
         code = block.getFieldValue("STATE") === "ON"
           ? "digitalWrite(LED_BUILTIN, HIGH);\n"
@@ -210,6 +329,26 @@
             ? "digitalWrite(LED_BUILTIN, LOW);\n"
             : "digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));\n";
         break;
+      case "pico_led_blink": {
+        const times = emitValue(block.getInputTargetBlock("TIMES"), ctx) || "5";
+        const ms = emitValue(block.getInputTargetBlock("MS"), ctx) || "300";
+        ctx.setup.add("pinMode(LED_BUILTIN, OUTPUT);");
+        code = `for (int ledCount = 0; ledCount < ${times}; ++ledCount) {\n  digitalWrite(LED_BUILTIN, HIGH);\n  delay(${ms});\n  digitalWrite(LED_BUILTIN, LOW);\n  delay(${ms});\n}\n`;
+        break;
+      }
+      case "pico_led_pin": {
+        const pin = emitValue(block.getInputTargetBlock("PIN"), ctx) || "13";
+        ctx.setup.add(`pinMode(${pin}, OUTPUT);`);
+        code = `digitalWrite(${pin}, ${block.getFieldValue("STATE") === "1" ? "HIGH" : "LOW"});\n`;
+        break;
+      }
+      case "pico_led_brightness": {
+        const pin = emitValue(block.getInputTargetBlock("PIN"), ctx) || "9";
+        const brightness = emitValue(block.getInputTargetBlock("BRIGHTNESS"), ctx) || "50";
+        ctx.setup.add(`pinMode(${pin}, OUTPUT);`);
+        code = `analogWrite(${pin}, constrain(${brightness}, 0, 100) * 255 / 100);\n`;
+        break;
+      }
       case "pico_relay_write":
       case "pico_pin_write_digital": {
         const pin = emitValue(block.getInputTargetBlock("PIN"), ctx) || "13";
@@ -268,6 +407,12 @@
         code = `tone(${pin}, ${freq}, ${duration});\ndelay(${duration});\nnoTone(${pin});\n`;
         break;
       }
+      case "pico_wait_button": {
+        const pin = emitValue(block.getInputTargetBlock("PIN"), ctx) || "2";
+        ctx.setup.add(`pinMode(${pin}, INPUT_PULLUP);`);
+        code = `while (digitalRead(${pin}) == HIGH) { delay(1); }\n`;
+        break;
+      }
       default:
         break;
     }
@@ -307,6 +452,30 @@
       }
       case "pico_adc_read":
         return `analogRead(${emitValue(block.getInputTargetBlock("PIN"), ctx) || "A0"})`;
+      case "pico_adc_percent":
+        return `(analogRead(${emitValue(block.getInputTargetBlock("PIN"), ctx) || "A0"}) * 100 / 1023)`;
+      case "pico_answer_text": {
+        const prompt = emitValue(block.getInputTargetBlock("PROMPT"), ctx) || "\"\"";
+        ctx.globals.add([
+          "String readAnswer(String prompt) {",
+          "  Serial.println(prompt);",
+          "  while (!Serial.available()) { delay(10); }",
+          "  return Serial.readStringUntil('\\n');",
+          "}"
+        ].join("\n"));
+        return `readAnswer(${prompt})`;
+      }
+      case "pico_answer_number": {
+        const prompt = emitValue(block.getInputTargetBlock("PROMPT"), ctx) || "\"\"";
+        ctx.globals.add([
+          "String readAnswer(String prompt) {",
+          "  Serial.println(prompt);",
+          "  while (!Serial.available()) { delay(10); }",
+          "  return Serial.readStringUntil('\\n');",
+          "}"
+        ].join("\n"));
+        return `readAnswer(${prompt}).toFloat()`;
+      }
       case "pico_ultrasonic_read": {
         const trig = emitValue(block.getInputTargetBlock("TRIG"), ctx) || "3";
         const echo = emitValue(block.getInputTargetBlock("ECHO"), ctx) || "2";
@@ -329,6 +498,8 @@
         return "0";
       case "pico_map_value":
         return `map(${emitValue(block.getInputTargetBlock("VALUE"), ctx) || "0"}, ${emitValue(block.getInputTargetBlock("IN_MIN"), ctx) || "0"}, ${emitValue(block.getInputTargetBlock("IN_MAX"), ctx) || "1023"}, ${emitValue(block.getInputTargetBlock("OUT_MIN"), ctx) || "0"}, ${emitValue(block.getInputTargetBlock("OUT_MAX"), ctx) || "255"})`;
+      case "pico_random_int":
+        return `random(${emitValue(block.getInputTargetBlock("MIN"), ctx) || "1"}, (${emitValue(block.getInputTargetBlock("MAX"), ctx) || "10"}) + 1)`;
       default:
         return "0";
     }

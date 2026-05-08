@@ -16,128 +16,167 @@
         <div class="brand-mark">NB</div>
         <div>
           <h1>Neuro Block</h1>
-          <p>보이는 건 더 단순하게, 동작은 더 강하게</p>
+          <p>작업 화면은 가볍게, 필요한 도구는 메뉴 안에</p>
         </div>
       </div>
-      <div class="session-area">
-        <form id="authForm" class="auth-form">
-          <input id="usernameInput" type="text" placeholder="아이디" required>
-          <input id="passwordInput" type="password" placeholder="비밀번호" required>
-          <button type="submit">로그인</button>
-        </form>
+
+      <form id="authForm" class="auth-form">
+        <input id="usernameInput" type="text" placeholder="아이디" required>
+        <input id="passwordInput" type="password" placeholder="비밀번호" required>
+        <button type="submit">로그인</button>
         <button id="logoutButton" class="secondary" type="button">로그아웃</button>
-      </div>
+      </form>
     </header>
 
-    <section class="hero-strip">
-      <div>
-        <strong>중요 패널은 접어두고, 필요할 때만 열어 쓰는 IDE</strong>
-        <p>블록 런타임을 메인 앱과 분리했고, 장치별 업로드 흐름도 Pico와 Arduino에 맞게 나눴습니다.</p>
-      </div>
-      <div class="hero-chip-row">
-        <span class="hero-chip">Collapsible UI</span>
-        <span class="hero-chip">Lazy Block Runtime</span>
-        <span class="hero-chip">Pico + Arduino</span>
-      </div>
-    </section>
+    <nav class="commandbar">
+      <label class="inline-field device-picker">
+        <span>대상</span>
+        <select id="deviceTarget">
+          <option value="pico">Raspberry Pi Pico</option>
+          <option value="arduino">Arduino</option>
+        </select>
+      </label>
 
-    <nav class="toolbar">
-      <div class="toolbar-group">
-        <label class="inline-field">
-          <span>기기</span>
-          <select id="deviceTarget">
-            <option value="pico">Raspberry Pi Pico</option>
-            <option value="arduino">Arduino</option>
-          </select>
-        </label>
+      <label class="inline-field language-picker">
+        <span>언어</span>
+        <select id="languageSelect">
+          <option value="ko">한국어</option>
+          <option value="en">English</option>
+        </select>
+      </label>
+
+      <div class="editor-tabs">
+        <button id="showBlocksTab" class="tab active" type="button">블록</button>
+        <button id="showCodeTab" class="tab" type="button">코드</button>
+        <span id="activeFileLabel" class="active-file">main.py</span>
       </div>
-      <div class="toolbar-group">
-        <button id="generatePythonButton" type="button">블록 -> 코드</button>
-        <button id="saveLocalButton" type="button">로컬 저장</button>
-        <button id="downloadFileButton" class="secondary" type="button">다운로드</button>
+
+      <div class="menu-cluster" aria-label="작업 메뉴">
+        <details class="menu">
+          <summary>파일</summary>
+          <div class="menu-panel">
+            <button id="generatePythonButton" type="button">블록을 코드로 변환</button>
+            <button id="saveLocalButton" type="button">로컬 저장</button>
+            <button id="downloadFileButton" class="secondary" type="button">파일 다운로드</button>
+            <hr>
+            <button id="newFolderButton" class="secondary" type="button">폴더 만들기</button>
+            <button id="newFileButton" class="secondary" type="button">파일 만들기</button>
+            <button id="renameLocalButton" class="secondary" type="button">이름 변경</button>
+            <button id="deleteLocalButton" class="danger" type="button">삭제</button>
+          </div>
+        </details>
+
+        <details class="menu">
+          <summary>기기</summary>
+          <div class="menu-panel wide-menu">
+            <div class="menu-grid">
+              <button id="connectButton" type="button">시리얼 연결</button>
+              <button id="disconnectButton" class="secondary" type="button">연결 해제</button>
+              <button id="runOnPicoButton" type="button">Pico에서 실행</button>
+              <button id="saveToPicoButton" type="button">Pico에 저장</button>
+              <button id="uploadDeviceButton" type="button">기기에 업로드</button>
+              <button id="syncLibrariesButton" class="secondary" type="button">라이브러리 동기화</button>
+            </div>
+            <hr>
+            <p id="deviceHint" class="panel-note">Pico는 Web Serial로 연결하고, Arduino는 보드와 포트를 선택해 업로드합니다.</p>
+            <label class="field">
+              <span>Arduino 보드 검색</span>
+              <input id="arduinoBoardSearchInput" type="text" placeholder="uno, nano, esp32">
+            </label>
+            <button id="refreshArduinoBoardsButton" class="secondary" type="button">보드 목록 새로고침</button>
+            <div id="arduinoBoardList" class="tree board-list"></div>
+            <label class="field">
+              <span>Arduino 보드 FQBN</span>
+              <input id="arduinoFqbnInput" type="text" placeholder="arduino:avr:uno">
+            </label>
+            <label class="field">
+              <span>Arduino 포트</span>
+              <input id="arduinoPortInput" type="text" placeholder="COM3">
+            </label>
+            <div id="deviceStatusBox" class="tree compact-tree"></div>
+          </div>
+        </details>
+
+        <details class="menu">
+          <summary>관리</summary>
+          <div class="menu-panel wide-menu">
+            <section class="menu-section">
+              <h2>펌웨어</h2>
+              <label class="field">
+                <span>보드</span>
+                <select id="boardSelect">
+                  <option value="Pico">Raspberry Pi Pico</option>
+                  <option value="Pico W">Raspberry Pi Pico W</option>
+                  <option value="Pico 2">Raspberry Pi Pico 2</option>
+                  <option value="Pico 2 W">Raspberry Pi Pico 2 W</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>버전</span>
+                <input id="firmwareVersionInput" type="text" placeholder="MicroPython v1.24.0">
+              </label>
+              <label class="field">
+                <span>UF2 URL</span>
+                <input id="firmwareUrlInput" type="url" placeholder="https://example.com/firmware.uf2">
+              </label>
+              <div class="menu-grid">
+                <button id="downloadFirmwareButton" class="secondary" type="button">다운로드</button>
+                <button id="saveFirmwarePresetButton" class="secondary" type="button">프리셋 저장</button>
+              </div>
+              <div id="firmwarePresetList" class="preset-list"></div>
+            </section>
+
+            <section class="menu-section">
+              <h2>Pico 파일</h2>
+              <div class="menu-grid">
+                <button id="refreshPicoButton" class="secondary" type="button">새로고침</button>
+                <button id="loadFromPicoButton" class="secondary" type="button">불러오기</button>
+                <button id="newPicoFolderButton" class="secondary" type="button">폴더 생성</button>
+                <button id="renamePicoButton" class="secondary" type="button">이름 변경</button>
+                <button id="deletePicoButton" class="danger" type="button">삭제</button>
+              </div>
+              <div id="picoTree" class="tree"></div>
+            </section>
+
+            <section class="menu-section">
+              <h2>시리얼 포트</h2>
+              <button id="refreshPortsButton" class="secondary" type="button">목록 새로고침</button>
+              <div id="serialPortList" class="tree compact-tree"></div>
+            </section>
+          </div>
+        </details>
       </div>
-      <div class="toolbar-group">
-        <button id="connectButton" type="button">시리얼 연결</button>
-        <button id="disconnectButton" class="secondary" type="button">연결 해제</button>
-        <button id="runOnPicoButton" type="button">코드 실행</button>
-        <button id="saveToPicoButton" type="button">Pico에 저장</button>
-        <button id="uploadDeviceButton" type="button">기기에 업로드</button>
-        <button id="syncLibrariesButton" class="secondary" type="button">라이브러리 동기화</button>
-      </div>
+
       <div class="toolbar-status">
         <span id="sessionStatus">로그인이 필요합니다.</span>
-        <span id="picoStatus">기기 연결 대기 중</span>
+        <span id="picoStatus">Pico 연결 대기 중</span>
       </div>
     </nav>
 
     <main class="main-grid">
       <aside class="left-pane">
-        <section class="panel" data-collapsible>
+        <section class="panel file-panel" data-collapsible>
           <div class="panel-head">
-            <h2>로컬 파일</h2>
-            <div class="panel-head-actions">
+            <div>
+              <h2>로컬 파일</h2>
               <span id="activeFolderLabel">/</span>
-              <button class="panel-toggle secondary" type="button" data-panel-toggle>접기</button>
             </div>
+            <button class="panel-toggle secondary" type="button" data-panel-toggle>접기</button>
           </div>
           <div class="panel-body">
-            <div class="action-grid">
-              <button id="newFolderButton" class="secondary" type="button">폴더 추가</button>
-              <button id="newFileButton" class="secondary" type="button">파일 추가</button>
-              <button id="renameLocalButton" class="secondary" type="button">이름 변경</button>
-              <button id="deleteLocalButton" class="danger" type="button">삭제</button>
-            </div>
             <div id="localTree" class="tree"></div>
-          </div>
-        </section>
-
-        <section class="panel is-collapsed" data-collapsible>
-          <div class="panel-head">
-            <h2>펌웨어</h2>
-            <div class="panel-head-actions">
-              <span>UF2 프리셋</span>
-              <button class="panel-toggle secondary" type="button" data-panel-toggle>열기</button>
-            </div>
-          </div>
-          <div class="panel-body">
-            <label class="field">
-              <span>보드</span>
-              <select id="boardSelect">
-                <option value="Pico">Raspberry Pi Pico</option>
-                <option value="Pico W">Raspberry Pi Pico W</option>
-                <option value="Pico 2">Raspberry Pi Pico 2</option>
-                <option value="Pico 2 W">Raspberry Pi Pico 2 W</option>
-              </select>
-            </label>
-            <label class="field">
-              <span>버전</span>
-              <input id="firmwareVersionInput" type="text" placeholder="MicroPython v1.24.0">
-            </label>
-            <label class="field">
-              <span>UF2 URL</span>
-              <input id="firmwareUrlInput" type="url" placeholder="https://example.com/firmware.uf2">
-            </label>
-            <div class="action-grid">
-              <button id="downloadFirmwareButton" class="secondary" type="button">다운로드</button>
-              <button id="saveFirmwarePresetButton" class="secondary" type="button">프리셋 저장</button>
-            </div>
-            <div id="firmwarePresetList" class="preset-list"></div>
           </div>
         </section>
       </aside>
 
       <section class="editor-pane">
-        <div class="editor-tabs">
-          <button id="showBlocksTab" class="tab active" type="button">블록</button>
-          <button id="showCodeTab" class="tab" type="button">코드</button>
-          <span id="activeFileLabel" class="active-file">main.py</span>
-        </div>
-
         <div class="editor-stack">
           <section id="blocksView" class="panel editor-panel visible">
             <div class="panel-head">
-              <h2>블록 작업 공간</h2>
-              <span>버튼과 센서 블록을 더 늘렸습니다</span>
+              <div>
+                <h2>블록 작업 공간</h2>
+                <span>블록을 조립하면 코드가 자동으로 준비됩니다.</span>
+              </div>
             </div>
             <div id="blocklyDiv" class="blockly-host"></div>
             <xml id="toolbox" style="display:none">
@@ -166,13 +205,23 @@
                 <block type="pico_print"><value name="TEXT"><shadow type="text"><field name="TEXT">Hello</field></shadow></value></block>
                 <block type="pico_sleep_ms"><value name="MS"><shadow type="math_number"><field name="NUM">500</field></shadow></value></block>
                 <block type="pico_led_write"></block>
+                <block type="pico_led_easy"></block>
+                <block type="pico_led_blink"><value name="TIMES"><shadow type="math_number"><field name="NUM">5</field></shadow></value><value name="MS"><shadow type="math_number"><field name="NUM">300</field></shadow></value></block>
+                <block type="pico_led_pin"><value name="PIN"><shadow type="math_number"><field name="NUM">15</field></shadow></value></block>
+                <block type="pico_led_brightness"><value name="PIN"><shadow type="math_number"><field name="NUM">15</field></shadow></value><value name="BRIGHTNESS"><shadow type="math_number"><field name="NUM">50</field></shadow></value></block>
                 <block type="pico_relay_write"><value name="PIN"><shadow type="math_number"><field name="NUM">15</field></shadow></value></block>
                 <block type="pico_buzzer_tone"><value name="PIN"><shadow type="math_number"><field name="NUM">15</field></shadow></value><value name="FREQ"><shadow type="math_number"><field name="NUM">440</field></shadow></value><value name="DURATION"><shadow type="math_number"><field name="NUM">250</field></shadow></value></block>
+              </category>
+              <category name="질문 / 답" colour="#8b5cf6">
+                <block type="pico_answer_text"><value name="PROMPT"><shadow type="text"><field name="TEXT">이름은?</field></shadow></value></block>
+                <block type="pico_answer_number"><value name="PROMPT"><shadow type="text"><field name="TEXT">숫자는?</field></shadow></value></block>
+                <block type="pico_print"><value name="TEXT"><block type="pico_answer_text"><value name="PROMPT"><shadow type="text"><field name="TEXT">대답해 주세요</field></shadow></value></block></value></block>
               </category>
               <category name="디지털 입출력" colour="#db2777">
                 <block type="pico_pin_write_digital"><value name="PIN"><shadow type="math_number"><field name="NUM">15</field></shadow></value></block>
                 <block type="pico_pin_read_digital"><value name="PIN"><shadow type="math_number"><field name="NUM">14</field></shadow></value></block>
                 <block type="pico_button_read"><value name="PIN"><shadow type="math_number"><field name="NUM">14</field></shadow></value></block>
+                <block type="pico_wait_button"><value name="PIN"><shadow type="math_number"><field name="NUM">14</field></shadow></value></block>
               </category>
               <category name="PWM / RGB / Servo" colour="#0ea5e9">
                 <block type="pico_pwm_write"><value name="PIN"><shadow type="math_number"><field name="NUM">15</field></shadow></value><value name="FREQ"><shadow type="math_number"><field name="NUM">1000</field></shadow></value><value name="DUTY"><shadow type="math_number"><field name="NUM">32768</field></shadow></value></block>
@@ -182,16 +231,20 @@
               </category>
               <category name="센서 입력" colour="#14b8a6">
                 <block type="pico_adc_read"><value name="PIN"><shadow type="math_number"><field name="NUM">26</field></shadow></value></block>
+                <block type="pico_adc_percent"><value name="PIN"><shadow type="math_number"><field name="NUM">26</field></shadow></value></block>
                 <block type="pico_ultrasonic_read"><value name="TRIG"><shadow type="math_number"><field name="NUM">3</field></shadow></value><value name="ECHO"><shadow type="math_number"><field name="NUM">2</field></shadow></value></block>
                 <block type="pico_read_temperature"></block>
+                <block type="pico_random_int"><value name="MIN"><shadow type="math_number"><field name="NUM">1</field></shadow></value><value name="MAX"><shadow type="math_number"><field name="NUM">10</field></shadow></value></block>
               </category>
             </xml>
           </section>
 
           <section id="codeView" class="panel editor-panel">
             <div class="panel-head">
-              <h2>코드</h2>
-              <span id="codeModeLabel">MicroPython 편집기</span>
+              <div>
+                <h2>코드</h2>
+                <span id="codeModeLabel">MicroPython 편집기</span>
+              </div>
             </div>
             <textarea id="pythonEditor" spellcheck="false"></textarea>
           </section>
@@ -199,7 +252,10 @@
 
         <section class="panel is-collapsed shell-panel" data-collapsible>
           <div class="panel-head">
-            <h2>셸 / 콘솔</h2>
+            <div>
+              <h2>로그 / 콘솔</h2>
+              <span>실행 결과와 장치 메시지를 확인합니다.</span>
+            </div>
             <div class="panel-head-actions">
               <button id="clearConsoleButton" class="secondary" type="button">비우기</button>
               <button class="panel-toggle secondary" type="button" data-panel-toggle>열기</button>
@@ -212,67 +268,14 @@
       </section>
 
       <aside class="right-pane">
-        <section class="panel" data-collapsible>
+        <section class="panel status-panel">
           <div class="panel-head">
-            <h2>기기 설정</h2>
-            <div class="panel-head-actions">
+            <div>
+              <h2>현재 모드</h2>
               <span id="deviceModeLabel">Pico 모드</span>
-              <button class="panel-toggle secondary" type="button" data-panel-toggle>접기</button>
             </div>
           </div>
-          <div class="panel-body">
-            <p id="deviceHint" class="panel-note">Pico는 Web Serial로 연결하고, Arduino는 보드와 포트를 선택해서 업로드합니다.</p>
-            <label class="field">
-              <span>Arduino 보드 검색</span>
-              <input id="arduinoBoardSearchInput" type="text" placeholder="uno, nano, esp32 같이 검색">
-            </label>
-            <div class="inline-actions">
-              <button id="refreshArduinoBoardsButton" class="secondary" type="button">보드 목록 새로고침</button>
-            </div>
-            <div id="arduinoBoardList" class="tree board-list"></div>
-            <label class="field">
-              <span>Arduino 보드 FQBN</span>
-              <input id="arduinoFqbnInput" type="text" placeholder="arduino:avr:uno">
-            </label>
-            <label class="field">
-              <span>Arduino 포트</span>
-              <input id="arduinoPortInput" type="text" placeholder="COM3">
-            </label>
-            <div id="deviceStatusBox" class="tree compact-tree"></div>
-          </div>
-        </section>
-
-        <section class="panel is-collapsed" data-collapsible>
-          <div class="panel-head">
-            <h2>Pico 파일</h2>
-            <div class="panel-head-actions">
-              <span>기기 내부 저장소</span>
-              <button class="panel-toggle secondary" type="button" data-panel-toggle>열기</button>
-            </div>
-          </div>
-          <div class="panel-body">
-            <div class="action-grid">
-              <button id="refreshPicoButton" class="secondary" type="button">새로고침</button>
-              <button id="loadFromPicoButton" class="secondary" type="button">불러오기</button>
-              <button id="newPicoFolderButton" class="secondary" type="button">폴더 생성</button>
-              <button id="renamePicoButton" class="secondary" type="button">이름 변경</button>
-              <button id="deletePicoButton" class="danger" type="button">삭제</button>
-            </div>
-            <div id="picoTree" class="tree"></div>
-          </div>
-        </section>
-
-        <section class="panel is-collapsed" data-collapsible>
-          <div class="panel-head">
-            <h2>시리얼 포트</h2>
-            <div class="panel-head-actions">
-              <button id="refreshPortsButton" class="secondary" type="button">목록 새로고침</button>
-              <button class="panel-toggle secondary" type="button" data-panel-toggle>열기</button>
-            </div>
-          </div>
-          <div class="panel-body">
-            <div id="serialPortList" class="tree compact-tree"></div>
-          </div>
+          <p class="panel-note">자주 쓰는 실행 작업은 상단 기기 메뉴에 모았습니다. 파일 목록만 옆에 두고, 나머지는 필요할 때 열면 됩니다.</p>
         </section>
       </aside>
     </main>
