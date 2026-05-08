@@ -456,7 +456,7 @@ textarea {
   min-height: 620px;
   overflow: auto;
   background: transparent;
-  color: transparent;
+  color: rgba(226, 232, 240, 0.58);
   caret-color: #f8fafc;
   white-space: pre;
 }

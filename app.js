@@ -595,7 +595,11 @@
 
   function syncCodeHighlight() {
     if (!el.codeHighlight) return;
-    el.codeHighlight.innerHTML = highlightCode(el.pythonEditor.value || " ");
+    try {
+      el.codeHighlight.innerHTML = highlightCode(el.pythonEditor.value || " ");
+    } catch {
+      el.codeHighlight.textContent = el.pythonEditor.value || " ";
+    }
     syncCodeHighlightScroll();
   }
 
