@@ -63,6 +63,7 @@
     picoTree: document.getElementById("picoTree"),
     activeFolderLabel: document.getElementById("activeFolderLabel"),
     activeFileLabel: document.getElementById("activeFileLabel"),
+    codeHighlight: document.getElementById("codeHighlight"),
     pythonEditor: document.getElementById("pythonEditor"),
     consoleOutput: document.getElementById("consoleOutput"),
     boardSelect: document.getElementById("boardSelect"),
@@ -272,6 +273,7 @@
     el.uploadDeviceButton.addEventListener("click", uploadToCurrentDevice);
     el.syncLibrariesButton.addEventListener("click", syncLibrariesForCurrentDevice);
     el.pythonEditor.addEventListener("input", handleEditorInput);
+    el.pythonEditor.addEventListener("scroll", syncCodeHighlightScroll);
     el.showBlocksTab.addEventListener("click", () => showTab("blocks"));
     el.showCodeTab.addEventListener("click", () => showTab("code"));
     document.addEventListener("click", closeMenusOnOutsideClick);
@@ -329,6 +331,7 @@
     el.showCodeTab.classList.toggle("active", kind === "code");
     el.blocksView.classList.toggle("visible", kind === "blocks");
     el.codeView.classList.toggle("visible", kind === "code");
+    if (kind === "code") requestAnimationFrame(syncCodeHighlight);
     if (kind === "blocks" && state.blocklyWorkspace) {
       setTimeout(() => Blockly.svgResize(state.blocklyWorkspace), 0);
     }
@@ -337,6 +340,7 @@
   function handleEditorInput() {
     const node = getNode(state.activeEditorPath);
     if (node && node.type === "file") node.content = el.pythonEditor.value;
+    syncCodeHighlight();
   }
 
   function getUsers() {
@@ -565,8 +569,52 @@
 
   function renderEditor() {
     const active = getNode(state.activeEditorPath);
-    el.pythonEditor.value = active && active.type === "file" ? active.content : DEFAULT_CODE;
+    setEditorValue(active && active.type === "file" ? active.content : DEFAULT_CODE);
     el.activeFileLabel.textContent = state.activeEditorPath;
+  }
+
+  function setEditorValue(code) {
+    el.pythonEditor.value = code;
+    syncCodeHighlight();
+  }
+
+  function syncCodeHighlight() {
+    if (!el.codeHighlight) return;
+    el.codeHighlight.innerHTML = highlightCode(el.pythonEditor.value || " ");
+    syncCodeHighlightScroll();
+  }
+
+  function syncCodeHighlightScroll() {
+    if (!el.codeHighlight) return;
+    el.codeHighlight.scrollTop = el.pythonEditor.scrollTop;
+    el.codeHighlight.scrollLeft = el.pythonEditor.scrollLeft;
+  }
+
+  function highlightCode(code) {
+    const keywords = state.deviceTarget === "arduino"
+      ? "\\b(?:void|setup|loop|if|else|for|while|do|switch|case|break|continue|return|int|long|float|double|bool|boolean|char|const|static|unsigned|String|HIGH|LOW|INPUT|OUTPUT|INPUT_PULLUP|true|false|null)\\b"
+      : "\\b(?:and|as|assert|break|class|continue|def|elif|else|except|False|finally|for|from|global|if|import|in|is|lambda|None|not|or|pass|raise|return|True|try|while|with|yield)\\b";
+    const builtins = "\\b(?:print|input|range|len|int|float|str|max|min|Pin|PWM|ADC|sleep_ms|sleep_us|ticks_us|ticks_diff|digitalWrite|digitalRead|analogRead|analogWrite|delay|pinMode|Serial|random)\\b";
+    const tokenSource = "(\"(?:\\\\.|[^\"\\\\])*\"|'(?:\\\\.|[^'\\\\])*'|`(?:\\\\.|[^`\\\\])*`|#.*|//.*|" +
+      keywords + "|" + builtins + "|\\b\\d+(?:\\.\\d+)?\\b|[+\\-*/%=<>!&|]+)";
+    const tokenPattern = new RegExp(tokenSource, "g");
+
+    return code.replace(tokenPattern, (token) => {
+      const escaped = escapeHtml(token);
+      if (token.startsWith("#") || token.startsWith("//")) return `<span class="tok-comment">${escaped}</span>`;
+      if (token.startsWith("\"") || token.startsWith("'") || token.startsWith("`")) return `<span class="tok-string">${escaped}</span>`;
+      if (/^\d/.test(token)) return `<span class="tok-number">${escaped}</span>`;
+      if (new RegExp(`^${keywords}$`).test(token)) return `<span class="tok-keyword">${escaped}</span>`;
+      if (new RegExp(`^${builtins}$`).test(token)) return `<span class="tok-builtin">${escaped}</span>`;
+      return `<span class="tok-operator">${escaped}</span>`;
+    }).replace(/\n$/g, "\n ");
+  }
+
+  function escapeHtml(value) {
+    return String(value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
   }
 
   function currentFolderPath() {
@@ -628,7 +676,7 @@
     if (!state.blocklyWorkspace) return;
     const generated = python.pythonGenerator.workspaceToCode(state.blocklyWorkspace).trim();
     const code = generated || DEFAULT_CODE;
-    el.pythonEditor.value = code;
+    setEditorValue(code);
     const node = getNode(state.activeEditorPath);
     if (node && node.type === "file") node.content = code;
     persistWorkspace();
@@ -642,7 +690,7 @@
     const generated = state.deviceTarget === "arduino"
       ? generateArduinoCode()
       : python.pythonGenerator.workspaceToCode(state.blocklyWorkspace).trim();
-    if (generated) el.pythonEditor.value = generated;
+    if (generated) setEditorValue(generated);
   }
 
   function generateCodeForTarget() {
@@ -650,7 +698,7 @@
     const code = state.deviceTarget === "arduino"
       ? generateArduinoCode()
       : (python.pythonGenerator.workspaceToCode(state.blocklyWorkspace).trim() || DEFAULT_CODE);
-    el.pythonEditor.value = code;
+    setEditorValue(code);
     const node = getNode(state.activeEditorPath);
     if (node && node.type === "file") node.content = code;
     persistWorkspace();
@@ -1346,7 +1394,7 @@
     if (!target) return;
     try {
       const output = await rawExec([`with open(${pyString(target)}, 'r') as f:`, "    print(f.read())"].join("\n"));
-      el.pythonEditor.value = cleanPicoOutput(output);
+      setEditorValue(cleanPicoOutput(output));
       const node = getNode(state.activeEditorPath);
       if (node && node.type === "file") node.content = el.pythonEditor.value;
       log(`${target} 불러오기 완료`);
