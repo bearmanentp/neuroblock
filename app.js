@@ -344,7 +344,12 @@
   }
 
   function getUsers() {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+    try {
+      const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch {
+      return {};
+    }
   }
 
   function saveUsers(users) {
@@ -379,11 +384,13 @@
   function handleLogin(event) {
     event.preventDefault();
     const username = el.usernameInput.value.trim();
-    const password = el.passwordInput.value;
+    const password = el.passwordInput.value.trim();
     if (!username || !password) return alert("아이디와 비밀번호를 입력해주세요.");
     const users = getUsers();
-    if (!users[username]) users[username] = { password, workspace: getDefaultWorkspaceData() };
-    if (users[username].password !== password) return alert("비밀번호가 맞지 않습니다.");
+    users[username] = normalizeUserRecord(users[username], password);
+    if (String(users[username].password || "").trim() !== password) {
+      return alert("비밀번호가 맞지 않습니다.");
+    }
     state.user = username;
     state.workspaceData = users[username].workspace || getDefaultWorkspaceData();
     persistWorkspace();
@@ -392,6 +399,14 @@
     el.passwordInput.value = "";
     renderAll();
     log(`${username} 로그인 완료`);
+  }
+
+  function normalizeUserRecord(record, password) {
+    if (!record) return { password, workspace: getDefaultWorkspaceData() };
+    if (typeof record === "string") return { password: record.trim(), workspace: getDefaultWorkspaceData() };
+    if (!record.password) record.password = password;
+    if (!record.workspace) record.workspace = getDefaultWorkspaceData();
+    return record;
   }
 
   function logout() {
