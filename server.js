@@ -65,7 +65,8 @@ function readJson(req) {
 
 function serveStatic(req, res) {
   const requested = req.url === "/" ? "/index.html" : req.url;
-  const filePath = path.join(root, decodeURIComponent(requested.split("?")[0]));
+  const pathname = decodeURIComponent(requested.split("?")[0]);
+  const filePath = resolveStaticPath(pathname);
   if (!filePath.startsWith(root)) {
     res.writeHead(403);
     return res.end("Forbidden");
@@ -79,6 +80,13 @@ function serveStatic(req, res) {
     res.writeHead(200, { "Content-Type": mimeTypes[ext] || "application/octet-stream" });
     res.end(data);
   });
+}
+
+function resolveStaticPath(pathname) {
+  if (pathname.startsWith("/vendor/blockly/")) {
+    return path.join(root, "node_modules", "blockly", pathname.replace("/vendor/blockly/", ""));
+  }
+  return path.join(root, pathname);
 }
 
 function execArduinoCli(args, options = {}) {
