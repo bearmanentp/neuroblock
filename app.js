@@ -1544,4 +1544,83 @@
       alert(`Pico 연결 실패: ${error.message}`);
     }
   }
+  /* --- 1. 파일 관리를 위한 전역 변수 (기존 state 객체 활용 권장) --- */
+  let selectedPicoFile = null; 
+  
+  /* --- 2. 목록을 다시 그리는 핵심 함수 (새로 추가) --- */
+  async function refreshPicoFiles() {
+    const container = document.getElementById('picoTreeSide');
+    if (!container || !state.pico.connected) return;
+  
+    try {
+      container.style.opacity = '0.5';
+      
+      // Pico로부터 파일 목록 읽기 (MicroPython 명령 전송)
+      // OS 모듈을 이용해 파일 리스트를 가져오는 기존 로직이 있다면 호출하세요.
+      // 여기서는 예시로 'list_files' 처리가 된 결과가 온다고 가정합니다.
+      const files = await getFileListFromPico(); 
+  
+      container.innerHTML = '';
+      files.forEach(file => {
+        const item = document.createElement('div');
+        item.className = 'tree-item';
+        item.innerHTML = `<span class="icon">📄</span> ${file}`;
+        
+        item.onclick = () => {
+          document.querySelectorAll('#picoTreeSide .tree-item').forEach(el => el.classList.remove('selected'));
+          item.classList.add('selected');
+          selectedPicoFile = file; // 선택된 파일명 업데이트
+        };
+        container.appendChild(item);
+      });
+    } catch (error) {
+      log(`Pico 파일 목록 갱신 실패: ${error.message}`);
+    } finally {
+      container.style.opacity = '1';
+    }
+  }
+  
+  /* --- 3. 이름 변경 및 삭제 이벤트 리스너 (기존 코드 하단에 추가) --- */
+  
+  // 삭제 버튼
+  document.getElementById('deletePicoSide').addEventListener('click', async () => {
+    if (!selectedPicoFile) return alert("삭제할 파일을 선택하세요.");
+    if (confirm(`'${selectedPicoFile}' 파일을 삭제할까요?`)) {
+      try {
+        // Pico에서 파일 제거 명령 실행 (예: os.remove)
+        await runPythonCommand(`import os; os.remove('${selectedPicoFile}')`);
+        selectedPicoFile = null;
+        await refreshPicoFiles(); // 작업 후 자동 새로고침
+        log("파일이 삭제되었습니다.");
+      } catch (e) {
+        log(`삭제 실패: ${e.message}`);
+      }
+    }
+  });
+  
+  // 이름 변경 버튼
+  document.getElementById('renamePicoSide').addEventListener('click', async () => {
+    if (!selectedPicoFile) return alert("이름을 바꿀 파일을 선택하세요.");
+    const newName = prompt("새 이름을 입력하세요:", selectedPicoFile);
+    if (newName && newName !== selectedPicoFile) {
+      try {
+        // Pico에서 파일 이름 변경 실행 (예: os.rename)
+        await runPythonCommand(`import os; os.rename('${selectedPicoFile}', '${newName}')`);
+        selectedPicoFile = null;
+        await refreshPicoFiles(); // 작업 후 자동 새로고침
+        log(`이름이 '${newName}'으로 변경되었습니다.`);
+      } catch (e) {
+        log(`이름 변경 실패: ${e.message}`);
+      }
+    }
+  });
+  
+  // 패널 접기/펴기 공통 로직 (아직 없다면 추가)
+  document.querySelectorAll('[data-panel-toggle]').forEach(btn => {
+    btn.onclick = (e) => {
+      const panel = e.target.closest('.panel');
+      const isCollapsed = panel.classList.toggle('is-collapsed');
+      e.target.textContent = isCollapsed ? '열기' : '접기';
+    };
+  });
 })();
