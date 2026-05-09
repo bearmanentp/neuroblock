@@ -1544,38 +1544,44 @@
       alert(`Pico 연결 실패: ${error.message}`);
     }
   }
-/* --- 기존 refreshPicoFiles를 수정하여 왼쪽 패널과 연동 --- */
+/* --- 1. 전역 선택 변수 확인 --- */
+  // state.selectedPicoPath 는 이미 상단에 정의되어 있을 것이므로 따로 선언하지 않아도 됩니다.
+
+  /* --- 2. 목록을 불러오고 UI를 그리는 통합 함수 --- */
   async function refreshPicoFiles() {
-    if (!state.pico.connected) return; 
-    
-    // 왼쪽 패널 컨테이너
+    if (!state.pico.connected) return;
+
+    // HTML에 새로 만든 ID인 'picoTreeSide'를 직접 찾습니다.
     const container = document.getElementById('picoTreeSide');
     if (!container) return;
 
     try {
       container.style.opacity = '0.5';
       
-      // 1. Pico에서 파일 목록 가져오는 파이썬 코드 실행
+      // Pico에서 파일 목록을 가져오는 파이썬 코드
       const code = [
         "import os",
         "def walk(base):",
-        "    rows = []",
-        "    for name in os.listdir(base):",
-        "        path = name if base == '.' else base + '/' + name",
-        "        try:",
-        "            mode = os.stat(path)[0]",
-        "            is_dir = bool(mode & 0x4000)",
-        "        except: is_dir = False",
-        "        rows.append(('dir' if is_dir else 'file') + ':' + path)",
-        "        if is_dir: rows.extend(walk(path))",
-        "    return rows",
-        "for row in walk('.'): print(row)"
-      ].join("\n");
+        "    res = []",
+        "    try:",
+        "        for name in os.listdir(base):",
+        "            path = name if base == '.' else base + '/' + name",
+        "            try:",
+        "                s = os.stat(path)",
+        "                is_dir = bool(s[0] & 0x4000)",
+        "            except: is_dir = False",
+        "            res.append(('dir' if is_dir else 'file') + ':' + path)",
+        "            if is_dir: res.extend(walk(path))",
+        "    except: pass",
+        "    return res",
+        "for r in walk('.'): print(r)"
+      ].join("\\n");
 
-      const output = await rawExec(code);
-      
-      // 2. 결과 파싱하여 state에 저장
-      state.picoEntries = output.split(/\r?\n/)
+      const rawOutput = await rawExec(code);
+      const cleanOutput = cleanPicoOutput(rawOutput);
+
+      // 데이터 파싱
+      state.picoEntries = cleanOutput.split(/\r?\n/)
         .map(line => line.trim())
         .filter(line => line.startsWith("file:") || line.startsWith("dir:"))
         .map(line => {
@@ -1583,85 +1589,77 @@
           return { kind, path: rest.join(":") };
         });
 
-      // 3. 왼쪽 패널(picoTreeSide)에 그리기
-      renderPicoTreeSide(); 
-      log("Pico 파일 목록 새로고침 완료");
+      // UI 렌더링 호출
+      renderPicoTreeSide();
+      log("Pico 파일 목록 동기화 완료");
     } catch (error) {
-      log(`Pico 파일 목록 실패: ${error.message}`);
+      log(`목록 갱신 실패: ${error.message}`);
     } finally {
       container.style.opacity = '1';
     }
   }
 
-  /* --- 왼쪽 패널 전용 렌더링 함수 --- */
+  /* --- 3. 왼쪽 패널 전용 렌더링 함수 --- */
   function renderPicoTreeSide() {
     const container = document.getElementById('picoTreeSide');
+    if (!container) return;
     container.innerHTML = "";
 
-    if (!state.picoEntries.length) {
-      container.innerHTML = "<p class='tree-empty'>파일이 없습니다.</p>";
+    if (state.picoEntries.length === 0) {
+      container.innerHTML = "<p style='padding:10px; font-size:12px; color:#888;'>파일이 없습니다.</p>";
       return;
     }
 
     state.picoEntries.forEach(entry => {
       const item = document.createElement("div");
       item.className = `tree-item ${state.selectedPicoPath === entry.path ? "selected" : ""}`;
-      item.innerHTML = `<span class="icon">${entry.kind === "dir" ? "📁" : "📄"}</span> ${entry.path}`;
+      item.style.cursor = "pointer";
+      item.style.padding = "4px 8px";
+      item.style.fontSize = "13px";
       
+      // 아이콘과 경로 표시
+      item.innerHTML = `<span>${entry.kind === 'dir' ? '📁' : '📄'}</span> ${entry.path}`;
+      
+      // 클릭 시 선택 상태 변경
       item.onclick = () => {
-        state.selectedPicoPath = entry.path; // 선택된 경로 저장
-        renderPicoTreeSide(); // 다시 그려서 선택 효과 적용
+        state.selectedPicoPath = entry.path;
+        renderPicoTreeSide(); // 다시 그려서 하이라이트 적용
       };
+
       container.appendChild(item);
     });
   }
 
-  /* --- 하단 버튼 이벤트 연결 --- */
-
+  /* --- 4. 이름 변경 및 삭제 버튼 기능 연결 --- */
+  
   // 삭제 버튼
-  document.getElementById('deletePicoSide').onclick = async () => {
+  const delBtn = document.getElementById('deletePicoSide');
+  if(delBtn) delBtn.onclick = async () => {
     if (!state.selectedPicoPath) return alert("삭제할 파일을 선택하세요.");
-    if (!confirm(`'${state.selectedPicoPath}' 을(를) 삭제할까요?`)) return;
+    if (!confirm(`${state.selectedPicoPath} 파일을 삭제하시겠습니까?`)) return;
 
     try {
-      // dir인지 file인지에 따라 다른 명령 실행
-      const entry = state.picoEntries.find(e => e.path === state.selectedPicoPath);
-      const cmd = entry.kind === 'dir' 
-        ? `import os; os.rmdir('${entry.path}')` 
-        : `import os; os.remove('${entry.path}')`;
-      
-      await rawExec(cmd);
+      await rawExec(`import os; os.remove('${state.selectedPicoPath}')`);
       state.selectedPicoPath = null;
       await refreshPicoFiles(); // 자동 새로고침
-      log("삭제 완료");
     } catch (e) {
-      log(`삭제 실패: ${e.message}`);
+      log(`삭제 오류: ${e.message}`);
     }
   };
 
   // 이름 변경 버튼
-  document.getElementById('renamePicoSide').onclick = async () => {
+  const renBtn = document.getElementById('renamePicoSide');
+  if(renBtn) renBtn.onclick = async () => {
     if (!state.selectedPicoPath) return alert("이름을 바꿀 파일을 선택하세요.");
-    const newName = prompt("새 경로 또는 파일명:", state.selectedPicoPath);
+    const newName = prompt("새 이름을 입력하세요:", state.selectedPicoPath);
     if (newName && newName !== state.selectedPicoPath) {
       try {
         await rawExec(`import os; os.rename('${state.selectedPicoPath}', '${newName}')`);
         state.selectedPicoPath = null;
         await refreshPicoFiles(); // 자동 새로고침
-        log("이름 변경 완료");
       } catch (e) {
-        log(`변경 실패: ${e.message}`);
+        log(`변경 오류: ${e.message}`);
       }
     }
   };
-
-  // 패널 접기 기능
-  document.querySelectorAll('[data-panel-toggle]').forEach(btn => {
-    btn.onclick = (e) => {
-      const panel = e.target.closest('.panel');
-      const isCollapsed = panel.classList.toggle('is-collapsed');
-      e.target.textContent = isCollapsed ? '열기' : '접기';
-    };
-  });
-
 })(); // 전체 종료
