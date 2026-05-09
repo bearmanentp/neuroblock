@@ -1544,54 +1544,60 @@
       alert(`Pico 연결 실패: ${error.message}`);
     }
   }
-/* --- 1. 전역 선택 변수 확인 --- */
-  // state.selectedPicoPath 는 이미 상단에 정의되어 있을 것이므로 따로 선언하지 않아도 됩니다.
-
-  /* --- 2. 목록을 불러오고 UI를 그리는 통합 함수 --- */
+  
+/* --- 개선된 목록 새로고침 함수 --- */
   async function refreshPicoFiles() {
     if (!state.pico.connected) return;
 
-    // HTML에 새로 만든 ID인 'picoTreeSide'를 직접 찾습니다.
     const container = document.getElementById('picoTreeSide');
     if (!container) return;
 
     try {
       container.style.opacity = '0.5';
       
-      // Pico에서 파일 목록을 가져오는 파이썬 코드
+      // 줄바꿈 문자 처리를 위해 최대한 단순한 파이썬 코드를 보냅니다.
       const code = [
         "import os",
-        "def walk(base):",
-        "    res = []",
-        "    try:",
-        "        for name in os.listdir(base):",
-        "            path = name if base == '.' else base + '/' + name",
-        "            try:",
-        "                s = os.stat(path)",
-        "                is_dir = bool(s[0] & 0x4000)",
-        "            except: is_dir = False",
-        "            res.append(('dir' if is_dir else 'file') + ':' + path)",
-        "            if is_dir: res.extend(walk(path))",
-        "    except: pass",
-        "    return res",
-        "for r in walk('.'): print(r)"
-      ].join("\\n");
+        "def list_all(path='.'):",
+        "    for f in os.listdir(path):",
+        "        p = f if path == '.' else path + '/' + f",
+        "        try:",
+        "            is_d = bool(os.stat(p)[0] & 0x4000)",
+        "            print(('dir:' if is_d else 'file:') + p)",
+        "            if is_d: list_all(p)",
+        "        except: pass",
+        "list_all()"
+      ].join("\n");
 
-      const rawOutput = await rawExec(code);
-      const cleanOutput = cleanPicoOutput(rawOutput);
+      let rawOutput = await rawExec(code);
+      
+      // [중요] Raw REPL의 제어 문자 및 불필요한 헤더/푸터 강제 제거
+      const lines = rawOutput.split(/\r?\n/);
+      const filteredEntries = [];
 
-      // 데이터 파싱
-      state.picoEntries = cleanOutput.split(/\r?\n/)
-        .map(line => line.trim())
-        .filter(line => line.startsWith("file:") || line.startsWith("dir:"))
-        .map(line => {
-          const [kind, ...rest] = line.split(":");
-          return { kind, path: rest.join(":") };
-        });
+      lines.forEach(line => {
+        const trimmed = line.trim();
+        // 실제 데이터인 file: 또는 dir: 로 시작하는 라인만 추출
+        if (trimmed.startsWith("file:") || trimmed.startsWith("dir:")) {
+          const [kind, ...pathParts] = trimmed.split(":");
+          filteredEntries.push({
+            kind: kind,
+            path: pathParts.join(":")
+          });
+        }
+      });
 
-      // UI 렌더링 호출
+      state.picoEntries = filteredEntries;
+
+      // 화면에 그리기
       renderPicoTreeSide();
-      log("Pico 파일 목록 동기화 완료");
+      
+      if (filteredEntries.length > 0) {
+        log(`Pico 파일 ${filteredEntries.length}개 발견`);
+      } else {
+        log("Pico에 파일이 하나도 없습니다.");
+      }
+
     } catch (error) {
       log(`목록 갱신 실패: ${error.message}`);
     } finally {
@@ -1599,31 +1605,31 @@
     }
   }
 
-  /* --- 3. 왼쪽 패널 전용 렌더링 함수 --- */
+  /* --- UI 렌더링 (클래스명 주의) --- */
   function renderPicoTreeSide() {
     const container = document.getElementById('picoTreeSide');
     if (!container) return;
     container.innerHTML = "";
 
     if (state.picoEntries.length === 0) {
-      container.innerHTML = "<p style='padding:10px; font-size:12px; color:#888;'>파일이 없습니다.</p>";
+      container.innerHTML = "<p style='padding:10px; font-size:12px; color:#999;'>조회된 파일이 없습니다.</p>";
       return;
     }
 
-    state.picoEntries.forEach(entry => {
+    // 경로 순으로 정렬하여 표시
+    state.picoEntries.sort((a, b) => a.path.localeCompare(b.path)).forEach(entry => {
       const item = document.createElement("div");
+      // HTML에서 정의한 클래스명이 tree-item인지 확인하세요
       item.className = `tree-item ${state.selectedPicoPath === entry.path ? "selected" : ""}`;
+      item.style.padding = "5px 10px";
       item.style.cursor = "pointer";
-      item.style.padding = "4px 8px";
-      item.style.fontSize = "13px";
+      item.style.borderBottom = "1px solid #eee";
       
-      // 아이콘과 경로 표시
       item.innerHTML = `<span>${entry.kind === 'dir' ? '📁' : '📄'}</span> ${entry.path}`;
       
-      // 클릭 시 선택 상태 변경
       item.onclick = () => {
         state.selectedPicoPath = entry.path;
-        renderPicoTreeSide(); // 다시 그려서 하이라이트 적용
+        renderPicoTreeSide(); 
       };
 
       container.appendChild(item);
