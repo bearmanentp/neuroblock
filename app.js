@@ -608,6 +608,96 @@
     return fragment;
   }
 
+  // [수정] 모든 파일을 불러오고, 왼쪽 패널에도 렌더링하도록 통합
+  async function refreshPicoFiles() {
+    if (!state.pico.connected) return;
+
+    try {
+      // 1. 기존 UI 및 새로 만든 패널 둘 다 로딩 표시
+      if (el.picoTree) el.picoTree.style.opacity = "0.5";
+      const sideTree = document.getElementById('picoTreeSide');
+      if (sideTree) sideTree.style.opacity = "0.5";
+
+      // 2. 모든 파일을 찾는 파이썬 코드 (Thonny 스타일)
+      const code = [
+        "import os",
+        "print('[[LIST_START]]')",
+        "def scan(d='.'):",
+        "    try:",
+        "        for f in os.listdir(d):",
+        "            p = f if d == '.' else d + '/' + f",
+        "            try:",
+        "                s = os.stat(p)",
+        "                is_d = bool(s[0] & 0x4000)",
+        "                print(f'ENTRY:{is_d}:{p}')",
+        "                if is_d: scan(p)",
+        "            except: pass",
+        "    except: pass",
+        "scan()",
+        "print('[[LIST_END]]')"
+      ].join("\n");
+
+      const rawOutput = await rawExec(code);
+      
+      // 3. 데이터 추출
+      const startIdx = rawOutput.indexOf('[[LIST_START]]');
+      const endIdx = rawOutput.indexOf('[[LIST_END]]');
+      if (startIdx === -1 || endIdx === -1) return;
+
+      const dataSection = rawOutput.substring(startIdx + 14, endIdx).trim();
+      state.picoEntries = dataSection.split(/\r?\n/).filter(l => l.startsWith("ENTRY:")).map(line => {
+        const parts = line.trim().split(":");
+        return { kind: parts[1] === "True" ? "dir" : "file", path: parts[2] };
+      });
+
+      // 4. 기존 트리와 사이드 트리 모두 업데이트
+      renderPicoTree();      // 기존 모달창/탭용
+      renderPicoTreeSide();  // 새로 만든 왼쪽 패널용
+      
+      log(`Pico 저장소 동기화 완료 (${state.picoEntries.length}개 항목)`);
+    } catch (error) {
+      log(`Pico 목록 갱신 실패: ${error.message}`);
+    } finally {
+      if (el.picoTree) el.picoTree.style.opacity = "1";
+      const sideTree = document.getElementById('picoTreeSide');
+      if (sideTree) sideTree.style.opacity = "1";
+    }
+  }
+
+  // [추가] 왼쪽 패널 전용 렌더링 함수
+  function renderPicoTreeSide() {
+    const container = document.getElementById('picoTreeSide');
+    if (!container) return;
+    container.innerHTML = "";
+
+    state.picoEntries.sort((a, b) => (a.kind === b.kind ? a.path.localeCompare(b.path) : a.kind === 'dir' ? -1 : 1)).forEach(entry => {
+      const item = document.createElement("div");
+      item.className = `tree-item ${state.selectedPicoPath === entry.path ? "active" : ""}`;
+      const icon = entry.kind === 'dir' ? '📁' : '📄';
+      item.innerHTML = `<span class="icon">${icon}</span> <span class="name">${entry.path}</span>`;
+      
+      item.onclick = async () => {
+        state.selectedPicoPath = entry.path;
+        renderPicoTreeSide(); // 사이드 강조
+        renderPicoTree();     // 기존 트리도 동기화 강조
+        
+        // 파일 클릭 시 자동 로드 (txt, csv, py 등)
+        if (entry.kind === 'file') {
+          await loadFromPico(); // 기존에 정의된 loadFromPico 함수 활용
+        }
+      };
+      container.appendChild(item);
+    });
+  }
+
+  // [추가] 삭제 및 이름변경 버튼 연결
+  // 이 부분은 스크립트 하단(전역 버튼 리스너 모음)에 넣으세요.
+  const sideDel = document.getElementById('deletePicoSide');
+  if (sideDel) sideDel.onclick = deletePicoEntry; // 기존 함수 활용
+
+  const sideRen = document.getElementById('renamePicoSide');
+  if (sideRen) sideRen.onclick = renamePicoEntry; // 기존 함수 활용
+  
   function renderEditor() {
     const active = getNode(state.activeEditorPath);
     setEditorValue(active && active.type === "file" ? active.content : DEFAULT_CODE);
@@ -1349,156 +1439,4 @@
   function pyString(text) {
     return JSON.stringify(text).replace(/\u2028|\u2029/g, "");
   }
-
-  /* --------------------------------------------------------
-    1. 통합 파일 목록 새로고침 (모든 파일 탐색)
-  ----------------------------------------------------------- */
-  async function refreshPicoFiles() {
-    if (!state.pico.connected) return;
-  
-    const container = document.getElementById('picoTreeSide');
-    if (!container) return;
-  
-    try {
-      container.style.opacity = '0.5';
-      await interruptPico(); // 기기 신호 초기화
-  
-      // Thonny 방식으로 모든 파일을 긁어오는 파이썬 코드
-      const code = [
-        "import os",
-        "print('[[LIST_START]]')",
-        "def scan(d='.'):",
-        "    try:",
-        "        for f in os.listdir(d):",
-        "            p = f if d == '.' else d + '/' + f",
-        "            try:",
-        "                s = os.stat(p)",
-        "                is_d = bool(s[0] & 0x4000)",
-        "                print(f'ENTRY:{is_d}:{p}')",
-        "                if is_d: scan(p)",
-        "            except: pass",
-        "    except: pass",
-        "scan()",
-        "print('[[LIST_END]]')"
-      ].join("\n");
-  
-      const rawOutput = await rawExec(code);
-      
-      // 데이터 구간 추출
-      const startIdx = rawOutput.indexOf('[[LIST_START]]');
-      const endIdx = rawOutput.indexOf('[[LIST_END]]');
-      
-      if (startIdx === -1 || endIdx === -1) {
-        log("Pico 데이터 수신 오류. 다시 연결을 시도해 보세요.");
-        return;
-      }
-  
-      const dataSection = rawOutput.substring(startIdx + 14, endIdx).trim();
-      const lines = dataSection.split(/\r?\n/);
-      
-      state.picoEntries = lines.filter(l => l.startsWith("ENTRY:")).map(line => {
-        const parts = line.trim().split(":");
-        return { kind: parts[1] === "True" ? "dir" : "file", path: parts[2] };
-      });
-  
-      renderPicoTreeSide();
-      log(`Pico 동기화 완료: ${state.picoEntries.length}개 항목`);
-    } catch (error) {
-      log(`새로고침 실패: ${error.message}`);
-    } finally {
-      container.style.opacity = '1';
-    }
-  }
-  
-  /* --------------------------------------------------------
-    2. 통합 렌더링 및 파일 자동 읽기 (txt, csv, py 포함)
-  ----------------------------------------------------------- */
-  function renderPicoTreeSide() {
-    const container = document.getElementById('picoTreeSide');
-    if (!container) return;
-    container.innerHTML = "";
-  
-    if (state.picoEntries.length === 0) {
-      container.innerHTML = "<p class='tree-empty'>파일이 없습니다.</p>";
-      return;
-    }
-  
-    // 폴더 우선 정렬
-    state.picoEntries.sort((a, b) => {
-      if (a.kind !== b.kind) return a.kind === 'dir' ? -1 : 1;
-      return a.path.localeCompare(b.path);
-    }).forEach(entry => {
-      const item = document.createElement("div");
-      item.className = `tree-item ${state.selectedPicoPath === entry.path ? "selected" : ""}`;
-      
-      const icon = entry.kind === 'dir' ? '📁' : '📄';
-      item.innerHTML = `<span class="icon">${icon}</span> <span class="name">${entry.path}</span>`;
-      
-      item.onclick = async () => {
-        state.selectedPicoPath = entry.path;
-        renderPicoTreeSide(); // 선택 강조
-        
-        // 파일일 경우 자동으로 내용 읽기 (txt, csv, py 등 모두 가능)
-        if (entry.kind === 'file') {
-          try {
-            log(`${entry.path} 읽는 중...`);
-            const readCode = `with open('${entry.path}', 'r') as f: print(f.read())`;
-            const output = await rawExec(readCode);
-            const cleanContent = cleanPicoOutput(output);
-            
-            if (typeof setEditorValue === "function") setEditorValue(cleanContent);
-            else if (el.pythonEditor) el.pythonEditor.value = cleanContent;
-            
-            log(`${entry.path} 로드 완료`);
-          } catch (e) {
-            log(`파일 로드 실패: ${e.message}`);
-          }
-        }
-      };
-      container.appendChild(item);
-    });
-  }
-  
-  /* --------------------------------------------------------
-    3. 삭제 및 이름 변경 (기능 되살리기)
-  ----------------------------------------------------------- */
-  async function deletePicoFileSide() {
-    if (!state.selectedPicoPath) return alert("삭제할 파일을 선택하세요.");
-    if (!confirm(`'${state.selectedPicoPath}'을(를) 삭제할까요?`)) return;
-  
-    try {
-      const entry = state.picoEntries.find(e => e.path === state.selectedPicoPath);
-      const cmd = entry.kind === 'dir' ? `import os; os.rmdir('${entry.path}')` : `import os; os.remove('${entry.path}')`;
-      await rawExec(cmd);
-      state.selectedPicoPath = null;
-      await refreshPicoFiles();
-      log("삭제 완료");
-    } catch (e) {
-      log(`삭제 실패: ${e.message}`);
-    }
-  }
-  
-  async function renamePicoFileSide() {
-    if (!state.selectedPicoPath) return alert("변경할 파일을 선택하세요.");
-    const newName = prompt("새 파일 이름/경로:", state.selectedPicoPath);
-    if (!newName || newName === state.selectedPicoPath) return;
-  
-    try {
-      await rawExec(`import os; os.rename('${state.selectedPicoPath}', '${newName}')`);
-      state.selectedPicoPath = null;
-      await refreshPicoFiles();
-      log("이름 변경 완료");
-    } catch (e) {
-      log(`변경 실패: ${e.message}`);
-    }
-  }
-  
-  /* --------------------------------------------------------
-    4. 버튼 이벤트 바인딩
-  ----------------------------------------------------------- */
-  const delBtnSide = document.getElementById('deletePicoSide');
-  const renBtnSide = document.getElementById('renamePicoSide');
-  
-  if (delBtnSide) delBtnSide.onclick = deletePicoFileSide;
-  if (renBtnSide) renBtnSide.onclick = renamePicoFileSide;
 })(); // 전체 종료
