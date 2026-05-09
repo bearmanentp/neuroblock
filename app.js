@@ -608,17 +608,21 @@
     return fragment;
   }
 
-  // [수정] 모든 파일을 불러오고, 왼쪽 패널에도 렌더링하도록 통합
+/* --- [강제 가동 로직] 파일 목록 새로고침 및 사이드바 렌더링 --- */
   async function refreshPicoFiles() {
-    if (!state.pico.connected) return;
+    if (!state.pico || !state.pico.connected) {
+        log("Pico가 연결되지 않았습니다.");
+        return;
+    }
 
     try {
-      // 1. 기존 UI 및 새로 만든 패널 둘 다 로딩 표시
+      const sideContainer = document.getElementById('picoTreeSide');
+      if (sideContainer) sideContainer.style.opacity = "0.5";
       if (el.picoTree) el.picoTree.style.opacity = "0.5";
-      const sideTree = document.getElementById('picoTreeSide');
-      if (sideTree) sideTree.style.opacity = "0.5";
 
-      // 2. 모든 파일을 찾는 파이썬 코드 (Thonny 스타일)
+      await interruptPico();
+
+      // 모든 파일을 긁어오는 파이썬 코드 (Thonny 방식)
       const code = [
         "import os",
         "print('[[LIST_START]]')",
@@ -635,150 +639,75 @@
         "    except: pass",
         "scan()",
         "print('[[LIST_END]]')"
-      ].join("\n");
+      ].join("\\n");
 
       const rawOutput = await rawExec(code);
       
-      // 3. 데이터 추출
       const startIdx = rawOutput.indexOf('[[LIST_START]]');
       const endIdx = rawOutput.indexOf('[[LIST_END]]');
-      if (startIdx === -1 || endIdx === -1) return;
-
-      const dataSection = rawOutput.substring(startIdx + 14, endIdx).trim();
-      state.picoEntries = dataSection.split(/\r?\n/).filter(l => l.startsWith("ENTRY:")).map(line => {
-        const parts = line.trim().split(":");
-        return { kind: parts[1] === "True" ? "dir" : "file", path: parts[2] };
-      });
-
-      // 4. 기존 트리와 사이드 트리 모두 업데이트
-      renderPicoTree();      // 기존 모달창/탭용
-      renderPicoTreeSide();  // 새로 만든 왼쪽 패널용
       
-      log(`Pico 저장소 동기화 완료 (${state.picoEntries.length}개 항목)`);
+      if (startIdx !== -1 && endIdx !== -1) {
+        const dataSection = rawOutput.substring(startIdx + 14, endIdx).trim();
+        state.picoEntries = dataSection.split(/\r?\n/).filter(l => l.startsWith("ENTRY:")).map(line => {
+          const parts = line.trim().split(":");
+          return { kind: parts[1] === "True" ? "dir" : "file", path: parts[2] };
+        });
+
+        // 양쪽 UI 모두 갱신
+        if (typeof renderPicoTree === "function") renderPicoTree(); 
+        renderPicoTreeSide(); 
+        log(`Pico 저장소 동기화 완료: ${state.picoEntries.length}개 항목`);
+      }
     } catch (error) {
-      log(`Pico 목록 갱신 실패: ${error.message}`);
+      log(`새로고침 로직 에러: ${error.message}`);
     } finally {
+      const sideContainer = document.getElementById('picoTreeSide');
+      if (sideContainer) sideContainer.style.opacity = "1";
       if (el.picoTree) el.picoTree.style.opacity = "1";
-      const sideTree = document.getElementById('picoTreeSide');
-      if (sideTree) sideTree.style.opacity = "1";
     }
   }
 
-  // [추가] 왼쪽 패널 전용 렌더링 함수
+  /* --- 사이드바 전용 렌더링 (클릭 시 자동 로드 포함) --- */
   function renderPicoTreeSide() {
     const container = document.getElementById('picoTreeSide');
     if (!container) return;
     container.innerHTML = "";
 
+    if (!state.picoEntries || state.picoEntries.length === 0) {
+      container.innerHTML = "<p class='tree-empty'>파일이 없습니다.</p>";
+      return;
+    }
+
     state.picoEntries.sort((a, b) => (a.kind === b.kind ? a.path.localeCompare(b.path) : a.kind === 'dir' ? -1 : 1)).forEach(entry => {
       const item = document.createElement("div");
       item.className = `tree-item ${state.selectedPicoPath === entry.path ? "active" : ""}`;
+      item.style.cursor = "pointer";
+      item.style.padding = "4px 8px";
+      
       const icon = entry.kind === 'dir' ? '📁' : '📄';
-      item.innerHTML = `<span class="icon">${icon}</span> <span class="name">${entry.path}</span>`;
+      item.innerHTML = `<span>${icon}</span> <span class="name">${entry.path}</span>`;
       
       item.onclick = async () => {
         state.selectedPicoPath = entry.path;
-        renderPicoTreeSide(); // 사이드 강조
-        renderPicoTree();     // 기존 트리도 동기화 강조
+        renderPicoTreeSide(); 
+        if (typeof renderPicoTree === "function") renderPicoTree();
         
-        // 파일 클릭 시 자동 로드 (txt, csv, py 등)
         if (entry.kind === 'file') {
-          await loadFromPico(); // 기존에 정의된 loadFromPico 함수 활용
+          await loadFromPico(); // 기존 app.js에 있는 로드 함수 호출
         }
       };
       container.appendChild(item);
     });
   }
 
-  // [추가] 삭제 및 이름변경 버튼 연결
-  // 이 부분은 스크립트 하단(전역 버튼 리스너 모음)에 넣으세요.
-  const sideDel = document.getElementById('deletePicoSide');
-  if (sideDel) sideDel.onclick = deletePicoEntry; // 기존 함수 활용
-
-  const sideRen = document.getElementById('renamePicoSide');
-  if (sideRen) sideRen.onclick = renamePicoEntry; // 기존 함수 활용
-  
-  function renderEditor() {
-    const active = getNode(state.activeEditorPath);
-    setEditorValue(active && active.type === "file" ? active.content : DEFAULT_CODE);
-    el.activeFileLabel.textContent = state.activeEditorPath;
-  }
-
-  function setEditorValue(code) {
-    el.pythonEditor.value = code;
-    syncCodeHighlight();
-  }
-
-  function syncCodeHighlight() {
-    if (!el.codeHighlight) return;
-    try {
-      el.codeHighlight.innerHTML = highlightCode(el.pythonEditor.value || " ");
-    } catch {
-      el.codeHighlight.textContent = el.pythonEditor.value || " ";
-    }
-    syncCodeHighlightScroll();
-  }
-
-  function syncCodeHighlightScroll() {
-    if (!el.codeHighlight) return;
-    el.codeHighlight.scrollTop = el.pythonEditor.scrollTop;
-    el.codeHighlight.scrollLeft = el.pythonEditor.scrollLeft;
-  }
-
-  function highlightCode(code) {
-    const keywords = state.deviceTarget === "arduino"
-      ? "\\b(?:void|setup|loop|if|else|for|while|do|switch|case|break|continue|return|int|long|float|double|bool|boolean|char|const|static|unsigned|String|HIGH|LOW|INPUT|OUTPUT|INPUT_PULLUP|true|false|null)\\b"
-      : "\\b(?:and|as|assert|break|class|continue|def|elif|else|except|False|finally|for|from|global|if|import|in|is|lambda|None|not|or|pass|raise|return|True|try|while|with|yield)\\b";
-    const builtins = "\\b(?:print|input|range|len|int|float|str|max|min|Pin|PWM|ADC|sleep_ms|sleep_us|ticks_us|ticks_diff|digitalWrite|digitalRead|analogRead|analogWrite|delay|pinMode|Serial|random)\\b";
-    const tokenSource = "(\"(?:\\\\.|[^\"\\\\])*\"|'(?:\\\\.|[^'\\\\])*'|`(?:\\\\.|[^`\\\\])*`|#.*|//.*|" +
-      keywords + "|" + builtins + "|\\b\\d+(?:\\.\\d+)?\\b|[+\\-*/%=<>!&|]+)";
-    const tokenPattern = new RegExp(tokenSource, "g");
-
-    return code.replace(tokenPattern, (token) => {
-      const escaped = escapeHtml(token);
-      if (token.startsWith("#") || token.startsWith("//")) return `<span class="tok-comment">${escaped}</span>`;
-      if (token.startsWith("\"") || token.startsWith("'") || token.startsWith("`")) return `<span class="tok-string">${escaped}</span>`;
-      if (/^\d/.test(token)) return `<span class="tok-number">${escaped}</span>`;
-      if (new RegExp(`^${keywords}$`).test(token)) return `<span class="tok-keyword">${escaped}</span>`;
-      if (new RegExp(`^${builtins}$`).test(token)) return `<span class="tok-builtin">${escaped}</span>`;
-      return `<span class="tok-operator">${escaped}</span>`;
-    }).replace(/\n$/g, "\n ");
-  }
-
-  function escapeHtml(value) {
-    return String(value)
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;");
-  }
-
-  function currentFolderPath() {
-    const selected = getNode(state.selectedLocalPath);
-    return selected && selected.type === "folder" ? state.selectedLocalPath : getParentPath(state.selectedLocalPath);
-  }
-
-  function createFolder() {
-    const name = prompt("새 폴더 이름");
-    if (!name) return;
-    const path = currentFolderPath() === "/" ? `/${name}` : `${currentFolderPath()}/${name}`;
-    if (getNode(path)) return alert("같은 이름이 이미 있습니다.");
-    setNode(path, { type: "folder", children: {} });
-    state.openFolders.add(path);
-    persistWorkspace();
-    renderAll();
-  }
-
-  function createFile() {
-    const name = prompt("새 파일 이름", "script.py");
-    if (!name) return;
-    const path = currentFolderPath() === "/" ? `/${name}` : `${currentFolderPath()}/${name}`;
-    if (getNode(path)) return alert("같은 이름이 이미 있습니다.");
-    setNode(path, { type: "file", content: "# new file\n" });
-    state.selectedLocalPath = path;
-    state.activeEditorPath = path;
-    persistWorkspace();
-    renderAll();
-  }
+  /* --- 버튼 이벤트 강제 바인딩 --- */
+  // setTimeout을 사용하여 DOM이 확실히 로드된 후 바인딩
+  setTimeout(() => {
+    const dBtn = document.getElementById('deletePicoSide');
+    const rBtn = document.getElementById('renamePicoSide');
+    if (dBtn) dBtn.onclick = deletePicoEntry; // 기존 app.js 함수 연결
+    if (rBtn) rBtn.onclick = renamePicoEntry; // 기존 app.js 함수 연결
+  }, 1000);
 
   function renameLocalEntry() {
     const current = state.selectedLocalPath;
