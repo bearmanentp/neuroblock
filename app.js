@@ -1544,96 +1544,66 @@
       alert(`Pico 연결 실패: ${error.message}`);
     }
   }
-  
-/* --- 개선된 목록 새로고침 함수 --- */
+
+  //여기 고침
   async function refreshPicoFiles() {
     if (!state.pico.connected) return;
-
+  
     const container = document.getElementById('picoTreeSide');
     if (!container) return;
-
+  
     try {
       container.style.opacity = '0.5';
-      
-      // 줄바꿈 문자 처리를 위해 최대한 단순한 파이썬 코드를 보냅니다.
+  
+      // Thonny처럼 데이터를 태그([[STRE]], [[ENDE]])로 감싸서 출력하게 함
       const code = [
         "import os",
-        "def list_all(path='.'):",
-        "    for f in os.listdir(path):",
-        "        p = f if path == '.' else path + '/' + f",
-        "        try:",
-        "            is_d = bool(os.stat(p)[0] & 0x4000)",
-        "            print(('dir:' if is_d else 'file:') + p)",
-        "            if is_d: list_all(p)",
-        "        except: pass",
-        "list_all()"
+        "print('[[STRE]]')",
+        "def list_files(d='.'):",
+        "    try:",
+        "        for f in os.listdir(d):",
+        "            p = f if d == '.' else d + '/' + f",
+        "            try:",
+        "                s = os.stat(p)",
+        "                is_d = bool(s[0] & 0x4000)",
+        "                print(f'{is_d}:{p}')",
+        "                if is_d: list_files(p)",
+        "            except: pass",
+        "    except: pass",
+        "list_files()",
+        "print('[[ENDE]]')"
       ].join("\n");
-
-      let rawOutput = await rawExec(code);
+  
+      const rawOutput = await rawExec(code);
       
-      // [중요] Raw REPL의 제어 문자 및 불필요한 헤더/푸터 강제 제거
-      const lines = rawOutput.split(/\r?\n/);
-      const filteredEntries = [];
-
-      lines.forEach(line => {
-        const trimmed = line.trim();
-        // 실제 데이터인 file: 또는 dir: 로 시작하는 라인만 추출
-        if (trimmed.startsWith("file:") || trimmed.startsWith("dir:")) {
-          const [kind, ...pathParts] = trimmed.split(":");
-          filteredEntries.push({
-            kind: kind,
-            path: pathParts.join(":")
-          });
-        }
-      });
-
-      state.picoEntries = filteredEntries;
-
-      // 화면에 그리기
-      renderPicoTreeSide();
-      
-      if (filteredEntries.length > 0) {
-        log(`Pico 파일 ${filteredEntries.length}개 발견`);
-      } else {
-        log("Pico에 파일이 하나도 없습니다.");
+      // 1. 태그 사이의 내용만 추출 (Raw REPL 찌꺼기 제거)
+      const match = rawOutput.match(/\[\[STRE\]\]([\s\S]*?)\[\[ENDE\]\]/);
+      if (!match) {
+        log("Pico 응답 해석 실패: 데이터를 찾을 수 없습니다.");
+        return;
       }
-
+  
+      const dataContent = match[1].trim();
+      const lines = dataContent.split(/\r?\n/).filter(l => l.trim() !== "");
+  
+      // 2. 파싱 및 state 저장
+      state.picoEntries = lines.map(line => {
+        const [isDir, path] = line.split(":");
+        return {
+          kind: isDir === "True" ? "dir" : "file",
+          path: path
+        };
+      });
+  
+      // 3. UI 렌더링
+      renderPicoTreeSide();
+      log(`Pico 동기화 완료 (${state.picoEntries.length}개 항목)`);
+  
     } catch (error) {
       log(`목록 갱신 실패: ${error.message}`);
     } finally {
       container.style.opacity = '1';
     }
-  }
-
-  /* --- UI 렌더링 (클래스명 주의) --- */
-  function renderPicoTreeSide() {
-    const container = document.getElementById('picoTreeSide');
-    if (!container) return;
-    container.innerHTML = "";
-
-    if (state.picoEntries.length === 0) {
-      container.innerHTML = "<p style='padding:10px; font-size:12px; color:#999;'>조회된 파일이 없습니다.</p>";
-      return;
-    }
-
-    // 경로 순으로 정렬하여 표시
-    state.picoEntries.sort((a, b) => a.path.localeCompare(b.path)).forEach(entry => {
-      const item = document.createElement("div");
-      // HTML에서 정의한 클래스명이 tree-item인지 확인하세요
-      item.className = `tree-item ${state.selectedPicoPath === entry.path ? "selected" : ""}`;
-      item.style.padding = "5px 10px";
-      item.style.cursor = "pointer";
-      item.style.borderBottom = "1px solid #eee";
-      
-      item.innerHTML = `<span>${entry.kind === 'dir' ? '📁' : '📄'}</span> ${entry.path}`;
-      
-      item.onclick = () => {
-        state.selectedPicoPath = entry.path;
-        renderPicoTreeSide(); 
-      };
-
-      container.appendChild(item);
-    });
   }
 
   /* --- 4. 이름 변경 및 삭제 버튼 기능 연결 --- */
