@@ -1350,292 +1350,120 @@
     return JSON.stringify(text).replace(/\u2028|\u2029/g, "");
   }
 
-  async function refreshPicoFiles() {
-    if (!state.pico.connected) return alert("먼저 Pico를 연결해주세요.");
+  /* --------------------------------------------------------
+    1. 파일 읽기 기능 (텍스트/CSV 등)
+  ----------------------------------------------------------- */
+  async function loadFileFromPico() {
+    if (!state.pico.connected || !state.selectedPicoPath) return;
+  
+    // 폴더는 읽을 수 없으므로 제외
+    const entry = state.picoEntries.find(e => e.path === state.selectedPicoPath);
+    if (entry && entry.kind === 'dir') return;
+  
     try {
-      const code = [
-        "import os",
-        "def walk(base):",
-        "    rows = []",
-        "    for name in os.listdir(base):",
-        "        path = name if base == '.' else base + '/' + name",
-        "        try:",
-        "            mode = os.stat(path)[0]",
-        "            is_dir = bool(mode & 0x4000)",
-        "        except Exception:",
-        "            is_dir = False",
-        "        rows.append(('dir' if is_dir else 'file') + ':' + path)",
-        "        if is_dir:",
-        "            rows.extend(walk(path))",
-        "    return rows",
-        "for row in walk('.'):",
-        "    print(row)"
-      ].join("\n");
-      const output = await rawExec(code);
-      state.picoEntries = output.split(/\r?\n/).map((line) => line.trim()).filter((line) => line.startsWith("file:") || line.startsWith("dir:")).map((line) => {
-        const [kind, ...rest] = line.split(":");
-        return { kind, path: rest.join(":") };
-      });
-      renderPicoTree();
-      log("Pico 파일 목록 새로고침 완료");
+      log(`${state.selectedPicoPath} 읽는 중...`);
+      // 파이썬의 f.read()를 사용하여 파일 내용 전체를 출력
+      const code = `with open('${state.selectedPicoPath}', 'r') as f: print(f.read())`;
+      const rawOutput = await rawExec(code);
+      
+      // REPL 찌꺼기 제거 후 에디터에 설정
+      const content = cleanPicoOutput(rawOutput);
+      
+      // 에디터(Ace Editor 등) 또는 textarea에 값 넣기
+      if (typeof setEditorValue === "function") {
+        setEditorValue(content);
+      } else {
+        el.pythonEditor.value = content;
+      }
+      
+      log(`${state.selectedPicoPath} 불러오기 완료`);
     } catch (error) {
-      log(`Pico 파일 목록 실패: ${error.message}`);
+      log(`파일 읽기 실패: ${error.message}`);
     }
   }
-
-  function renderPicoTree() {
-    el.picoTree.innerHTML = "";
-    if (!state.picoEntries.length) {
-      el.picoTree.innerHTML = "<p class='tree-empty'>표시할 Pico 파일이 없습니다.</p>";
+  
+  /* --------------------------------------------------------
+    2. 삭제 및 이름 변경 기능
+  ----------------------------------------------------------- */
+  
+  // 삭제 처리
+  async function deleteSelectedPicoFile() {
+    if (!state.pico.connected || !state.selectedPicoPath) {
+      alert("삭제할 파일을 목록에서 선택하세요.");
       return;
     }
-    state.picoEntries.slice().sort((a, b) => a.path.localeCompare(b.path)).forEach((entry) => {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = `tree-item ${state.selectedPicoPath === entry.path ? "active" : ""}`;
-      button.textContent = `${entry.kind === "dir" ? "📁" : "📄"} ${entry.path}`;
-      button.addEventListener("click", () => {
-        state.selectedPicoPath = entry.path;
-        renderPicoTree();
-      });
-      el.picoTree.appendChild(button);
-    });
-  }
-
-  async function runOnPico() {
-    if (!state.pico.connected) return alert("먼저 Pico를 연결해주세요.");
+  
+    if (!confirm(`Pico에서 '${state.selectedPicoPath}'을(를) 삭제할까요?`)) return;
+  
     try {
-      const output = await rawExec(el.pythonEditor.value);
-      log(cleanPicoOutput(output) || "실행 완료");
-    } catch (error) {
-      log(`실행 실패: ${error.message}`);
-    }
-  }
-
-  async function saveToPico() {
-    if (!state.pico.connected) return alert("먼저 Pico를 연결해주세요.");
-    const target = prompt("Pico에 저장할 파일 경로", splitPath(state.activeEditorPath).pop() || "main.py");
-    if (!target) return;
-    try {
-      const output = await writeTextFileToPico(target, el.pythonEditor.value);
-      log(cleanPicoOutput(output) || `${target} 저장 완료`);
-      await refreshPicoFiles();
-    } catch (error) {
-      log(`저장 실패: ${error.message}`);
-    }
-  }
-
-  async function writeTextFileToPico(target, content) {
-    return rawExec([`data = ${pyString(content)}`, `with open(${pyString(target)}, 'w') as f:`, "    f.write(data)", `print('saved:${target}')`].join("\n"));
-  }
-
-  async function ensurePicoDirectory(target) {
-    return rawExec(["import os", `\ntry:\n    os.mkdir(${pyString(target)})\nexcept OSError:\n    pass`, `print('dir:${target}')`].join("\n"));
-  }
-
-  async function loadFromPico() {
-    if (!state.pico.connected) return alert("먼저 Pico를 연결해주세요.");
-    const target = state.selectedPicoPath || prompt("불러올 Pico 파일", "main.py");
-    if (!target) return;
-    try {
-      const output = await rawExec([`with open(${pyString(target)}, 'r') as f:`, "    print(f.read())"].join("\n"));
-      setEditorValue(cleanPicoOutput(output));
-      const node = getNode(state.activeEditorPath);
-      if (node && node.type === "file") node.content = el.pythonEditor.value;
-      log(`${target} 불러오기 완료`);
-      showTab("code");
-    } catch (error) {
-      log(`불러오기 실패: ${error.message}`);
-    }
-  }
-
-  async function createPicoFolder() {
-    if (!state.pico.connected) return alert("먼저 Pico를 연결해주세요.");
-    const target = prompt("생성할 Pico 폴더", "lib");
-    if (!target) return;
-    try {
-      const output = await rawExec(["import os", `os.mkdir(${pyString(target)})`, `print('mkdir:${target}')`].join("\n"));
-      log(cleanPicoOutput(output) || `${target} 생성 완료`);
-      await refreshPicoFiles();
-    } catch (error) {
-      log(`폴더 생성 실패: ${error.message}`);
-    }
-  }
-
-  async function renamePicoEntry() {
-    if (!state.pico.connected) return alert("먼저 Pico를 연결해주세요.");
-    const source = state.selectedPicoPath || prompt("변경할 Pico 경로", "main.py");
-    if (!source) return;
-    const target = prompt("새 경로 또는 파일명", source);
-    if (!target || target === source) return;
-    try {
-      const output = await rawExec(["import os", `os.rename(${pyString(source)}, ${pyString(target)})`, `print('renamed:${source}->${target}')`].join("\n"));
-      log(cleanPicoOutput(output) || "이름 변경 완료");
-      await refreshPicoFiles();
-    } catch (error) {
-      log(`이름 변경 실패: ${error.message}`);
-    }
-  }
-
-  async function deletePicoEntry() {
-    if (!state.pico.connected) return alert("먼저 Pico를 연결해주세요.");
-    const target = state.selectedPicoPath || prompt("삭제할 Pico 경로", "main.py");
-    if (!target) return;
-    if (!confirm(`${target} 을(를) Pico에서 삭제할까요?`)) return;
-    try {
-      const output = await rawExec(["import os", `os.remove(${pyString(target)})`, `print('deleted:${target}')`].join("\n"));
-      log(cleanPicoOutput(output) || "삭제 완료");
-      await refreshPicoFiles();
+      const entry = state.picoEntries.find(e => e.path === state.selectedPicoPath);
+      // 폴더면 rmdir, 파일이면 remove
+      const cmd = entry.kind === 'dir' 
+        ? `import os; os.rmdir('${entry.path}')` 
+        : `import os; os.remove('${entry.path}')`;
+      
+      await rawExec(cmd);
+      log(`삭제 완료: ${state.selectedPicoPath}`);
+      state.selectedPicoPath = null;
+      await refreshPicoFiles(); // 목록 새로고침
     } catch (error) {
       log(`삭제 실패: ${error.message}`);
     }
   }
-
-  function cleanPicoOutput(output) {
-    return output.replace(/\x04>/g, "").replace(/^.*?raw REPL; CTRL-B to exit\r?\n?/, "").trim();
-  }
-
-  function sleep(ms) {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
-
-  async function connectPico() {
-    if (!navigator.serial) {
-      alert("이 브라우저는 Web Serial API를 지원하지 않습니다.");
-      return;
-    }
-
-    if (state.deviceTarget === "arduino") {
-      try {
-        const port = await navigator.serial.requestPort();
-        const info = port.getInfo ? port.getInfo() : null;
-        log(`Arduino용 시리얼 권한을 열었습니다. ${formatPortInfo(info)}`);
-        await refreshSerialPorts();
-        await renderArduinoStatus(true);
-      } catch (error) {
-        log(`Arduino 시리얼 권한 요청 실패: ${error.message}`);
-      }
-      return;
-    }
-
-    try {
-      state.pico.port = await navigator.serial.requestPort({ filters: PICO_USB_FILTERS });
-      state.pico.info = state.pico.port.getInfo ? state.pico.port.getInfo() : null;
-      await state.pico.port.open({ baudRate: 115200 });
-
-      const encoder = new TextEncoderStream();
-      encoder.readable.pipeTo(state.pico.port.writable);
-      state.pico.writer = encoder.writable.getWriter();
-
-      const decoder = new TextDecoderStream();
-      state.pico.port.readable.pipeTo(decoder.writable);
-      state.pico.reader = decoder.readable.getReader();
-
-      state.pico.connected = true;
-      renderSession();
-      await refreshSerialPorts();
-      await sleep(600);
-      await interruptPico();
-      await refreshPicoFiles();
-      await renderDeviceMode();
-      log(`USB Pico 연결 완료: ${formatPortInfo(state.pico.info)}`);
-    } catch (error) {
-      log(`Pico 연결 실패: ${error.message}`);
-      alert(`Pico 연결 실패: ${error.message}`);
-    }
-  }
-
-  //여기 고침
-  async function refreshPicoFiles() {
-    if (!state.pico.connected) return;
   
+  // 이름 변경 처리
+  async function renameSelectedPicoFile() {
+    if (!state.pico.connected || !state.selectedPicoPath) {
+      alert("이름을 바꿀 파일을 선택하세요.");
+      return;
+    }
+  
+    const newName = prompt("새로운 파일명(경로 포함):", state.selectedPicoPath);
+    if (!newName || newName === state.selectedPicoPath) return;
+  
+    try {
+      await rawExec(`import os; os.rename('${state.selectedPicoPath}', '${newName}')`);
+      log(`이름 변경: ${state.selectedPicoPath} -> ${newName}`);
+      state.selectedPicoPath = null;
+      await refreshPicoFiles(); // 목록 새로고침
+    } catch (error) {
+      log(`변경 실패: ${error.message}`);
+    }
+  }
+  
+  /* --------------------------------------------------------
+    3. 렌더링 함수 수정 (클릭 시 파일 읽기 연동)
+  ----------------------------------------------------------- */
+  function renderPicoTreeSide() {
     const container = document.getElementById('picoTreeSide');
     if (!container) return;
+    container.innerHTML = "";
   
-    try {
-      container.style.opacity = '0.5';
-  
-      // Thonny처럼 데이터를 태그([[STRE]], [[ENDE]])로 감싸서 출력하게 함
-      const code = [
-        "import os",
-        "print('[[STRE]]')",
-        "def list_files(d='.'):",
-        "    try:",
-        "        for f in os.listdir(d):",
-        "            p = f if d == '.' else d + '/' + f",
-        "            try:",
-        "                s = os.stat(p)",
-        "                is_d = bool(s[0] & 0x4000)",
-        "                print(f'{is_d}:{p}')",
-        "                if is_d: list_files(p)",
-        "            except: pass",
-        "    except: pass",
-        "list_files()",
-        "print('[[ENDE]]')"
-      ].join("\n");
-  
-      const rawOutput = await rawExec(code);
+    state.picoEntries.forEach(entry => {
+      const item = document.createElement("div");
+      const isSelected = state.selectedPicoPath === entry.path;
+      item.className = `tree-item ${isSelected ? "selected" : ""}`;
       
-      // 1. 태그 사이의 내용만 추출 (Raw REPL 찌꺼기 제거)
-      const match = rawOutput.match(/\[\[STRE\]\]([\s\S]*?)\[\[ENDE\]\]/);
-      if (!match) {
-        log("Pico 응답 해석 실패: 데이터를 찾을 수 없습니다.");
-        return;
-      }
+      const icon = entry.kind === 'dir' ? '📁' : '📄';
+      item.innerHTML = `<span class="icon">${icon}</span> <span class="name">${entry.path}</span>`;
+      
+      item.onclick = async () => {
+        state.selectedPicoPath = entry.path;
+        renderPicoTreeSide();
+        
+        // 파일(txt, csv, py 등)일 경우 자동으로 내용 불러오기
+        if (entry.kind === 'file') {
+          await loadFileFromPico();
+        }
+      };
   
-      const dataContent = match[1].trim();
-      const lines = dataContent.split(/\r?\n/).filter(l => l.trim() !== "");
-  
-      // 2. 파싱 및 state 저장
-      state.picoEntries = lines.map(line => {
-        const [isDir, path] = line.split(":");
-        return {
-          kind: isDir === "True" ? "dir" : "file",
-          path: path
-        };
-      });
-  
-      // 3. UI 렌더링
-      renderPicoTreeSide();
-      log(`Pico 동기화 완료 (${state.picoEntries.length}개 항목)`);
-  
-    } catch (error) {
-      log(`목록 갱신 실패: ${error.message}`);
-    } finally {
-      container.style.opacity = '1';
-    }
+      container.appendChild(item);
+    });
   }
-
-  /* --- 4. 이름 변경 및 삭제 버튼 기능 연결 --- */
-  
-  // 삭제 버튼
+  // 버튼 ID는 사용자의 HTML 구조에 맞게 조정하세요
   const delBtn = document.getElementById('deletePicoSide');
-  if(delBtn) delBtn.onclick = async () => {
-    if (!state.selectedPicoPath) return alert("삭제할 파일을 선택하세요.");
-    if (!confirm(`${state.selectedPicoPath} 파일을 삭제하시겠습니까?`)) return;
-
-    try {
-      await rawExec(`import os; os.remove('${state.selectedPicoPath}')`);
-      state.selectedPicoPath = null;
-      await refreshPicoFiles(); // 자동 새로고침
-    } catch (e) {
-      log(`삭제 오류: ${e.message}`);
-    }
-  };
-
-  // 이름 변경 버튼
   const renBtn = document.getElementById('renamePicoSide');
-  if(renBtn) renBtn.onclick = async () => {
-    if (!state.selectedPicoPath) return alert("이름을 바꿀 파일을 선택하세요.");
-    const newName = prompt("새 이름을 입력하세요:", state.selectedPicoPath);
-    if (newName && newName !== state.selectedPicoPath) {
-      try {
-        await rawExec(`import os; os.rename('${state.selectedPicoPath}', '${newName}')`);
-        state.selectedPicoPath = null;
-        await refreshPicoFiles(); // 자동 새로고침
-      } catch (e) {
-        log(`변경 오류: ${e.message}`);
-      }
-    }
-  };
+  
+  if (delBtn) delBtn.onclick = deleteSelectedPicoFile;
+  if (renBtn) renBtn.onclick = renameSelectedPicoFile;
 })(); // 전체 종료
