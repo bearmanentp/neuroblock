@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=20260508-3">
+  <link rel="stylesheet" href="./styles.css?v=20260515-1">
 </head>
 <body>
   <div class="app-shell">
@@ -122,20 +122,10 @@
               <div class="menu-grid">
                 <button id="downloadFirmwareButton" class="secondary" type="button">다운로드</button>
                 <button id="saveFirmwarePresetButton" class="secondary" type="button">프리셋 저장</button>
+                <button id="openFirmwareLinkButton" class="secondary" type="button">공식 UF2 열기</button>
+                <button id="factoryResetButton" class="danger" type="button">공장 초기화</button>
               </div>
               <div id="firmwarePresetList" class="preset-list"></div>
-            </section>
-
-            <section class="menu-section">
-              <h2>Pico 파일</h2>
-              <div class="menu-grid">
-                <button id="refreshPicoButton" class="secondary" type="button">새로고침</button>
-                <button id="loadFromPicoButton" class="secondary" type="button">불러오기</button>
-                <button id="newPicoFolderButton" class="secondary" type="button">폴더 생성</button>
-                <button id="renamePicoButton" class="secondary" type="button">이름 변경</button>
-                <button id="deletePicoButton" class="danger" type="button">삭제</button>
-              </div>
-              <div id="picoTree" class="tree"></div>
             </section>
 
             <section class="menu-section">
@@ -165,6 +155,20 @@
           </div>
           <div class="panel-body">
             <div id="localTree" class="tree"></div>
+            <div class="subtree-head">
+              <div>
+                <h2>Pico 파일</h2>
+                <span>연결 후 py, csv 등 모든 파일 표시</span>
+              </div>
+              <div class="mini-actions">
+                <button id="refreshPicoButton" class="secondary" type="button">새로고침</button>
+                <button id="loadFromPicoButton" class="secondary" type="button">불러오기</button>
+                <button id="newPicoFolderButton" class="secondary" type="button">폴더</button>
+                <button id="renamePicoButton" class="secondary" type="button">이름</button>
+                <button id="deletePicoButton" class="danger" type="button">삭제</button>
+              </div>
+            </div>
+            <div id="picoTree" class="tree pico-tree"></div>
           </div>
         </section>
       </aside>
@@ -183,6 +187,7 @@
               <category name="제어" colour="#2563eb">
                 <block type="controls_repeat_ext"><value name="TIMES"><shadow type="math_number"><field name="NUM">10</field></shadow></value></block>
                 <block type="controls_whileUntil"></block>
+                <block type="pico_forever"></block>
                 <block type="controls_if"></block>
                 <block type="controls_flow_statements"></block>
               </category>
@@ -266,6 +271,10 @@
           </div>
           <div class="panel-body">
             <div id="consoleOutput" class="console"></div>
+            <form id="consoleForm" class="console-form">
+              <input id="consoleInput" type="text" placeholder="Pico 명령 입력: print('hi')">
+              <button id="consoleSendButton" type="submit">전송</button>
+            </form>
           </div>
         </section>
       </section>
@@ -284,11 +293,16 @@
     </main>
   </div>
 
-  <script src="./vendor/blockly/blockly_compressed.js?v=20260508-4"></script>
-  <script src="./vendor/blockly/blocks_compressed.js?v=20260508-4"></script>
-  <script src="./vendor/blockly/msg/ko.js?v=20260508-4"></script>
-  <script src="./vendor/blockly/python_compressed.js?v=20260508-4"></script>
-  <script src="./block-runtime.js?v=20260508-4"></script>
-  <script src="./app.js?v=20260508-4"></script>
+  <div id="contextMenu" class="context-menu" hidden>
+    <button type="button" data-action="rename">이름 바꾸기</button>
+    <button type="button" data-action="delete">삭제하기</button>
+  </div>
+
+  <script src="./vendor/blockly/blockly_compressed.js?v=20260515-1"></script>
+  <script src="./vendor/blockly/blocks_compressed.js?v=20260515-1"></script>
+  <script src="./vendor/blockly/msg/ko.js?v=20260515-1"></script>
+  <script src="./vendor/blockly/python_compressed.js?v=20260515-1"></script>
+  <script src="./block-runtime.js?v=20260515-1"></script>
+  <script src="./app.js?v=20260515-1"></script>
 </body>
 </html>

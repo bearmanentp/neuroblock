@@ -3,6 +3,7 @@
     const t = getMessages(language);
     Blockly.defineBlocksWithJsonArray([
       { type: "pico_print", message0: t.print, args0: [{ type: "input_value", name: "TEXT" }], previousStatement: null, nextStatement: null, colour: 20 },
+      { type: "pico_forever", message0: t.forever, args0: [{ type: "input_statement", name: "DO" }], previousStatement: null, nextStatement: null, colour: 210 },
       { type: "pico_sleep_ms", message0: t.sleepMs, args0: [{ type: "input_value", name: "MS", check: "Number" }], previousStatement: null, nextStatement: null, colour: 20 },
       { type: "pico_led_write", message0: t.ledBuiltin, args0: [{ type: "field_dropdown", name: "STATE", options: t.onOffToggle }] , previousStatement: null, nextStatement: null, colour: 0 },
       { type: "pico_led_easy", message0: t.ledEasy, args0: [{ type: "field_dropdown", name: "STATE", options: t.onOffToggle }] , previousStatement: null, nextStatement: null, colour: 0 },
@@ -31,6 +32,10 @@
 
     const py = pythonGenerator;
     py.forBlock.pico_print = (block, generator) => `print(${generator.valueToCode(block, "TEXT", 0) || "''"})\n`;
+    py.forBlock.pico_forever = (block, generator) => {
+      const body = generator.statementToCode(block, "DO") || "    pass\n";
+      return `while True:\n${body}`;
+    };
     py.forBlock.pico_sleep_ms = (block, generator) => {
       generator.definitions_.import_utime = "from utime import sleep_ms";
       return `sleep_ms(${generator.valueToCode(block, "MS", 0) || "100"})\n`;
@@ -196,6 +201,7 @@
   function getMessages(language) {
     const ko = {
       print: "출력하기 %1",
+      forever: "무한반복 %1",
       sleepMs: "%1 ms 기다리기",
       ledBuiltin: "내장 LED %1",
       ledEasy: "LED 쉽게 %1",
@@ -226,6 +232,7 @@
     };
     const en = {
       print: "print %1",
+      forever: "forever %1",
       sleepMs: "wait %1 ms",
       ledBuiltin: "built-in LED %1",
       ledEasy: "easy LED %1",
@@ -292,6 +299,11 @@
         const times = emitValue(block.getInputTargetBlock("TIMES"), ctx) || "0";
         const body = emitStatement(block.getInputTargetBlock("DO"), ctx) || "";
         code = `for (int count = 0; count < ${times}; ++count) {\n${indent(body || "// no-op")}\n}\n`;
+        break;
+      }
+      case "pico_forever": {
+        const body = emitStatement(block.getInputTargetBlock("DO"), ctx) || "";
+        code = `while (true) {\n${indent(body || "// no-op")}\n}\n`;
         break;
       }
       case "controls_whileUntil": {

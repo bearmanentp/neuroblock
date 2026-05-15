@@ -28,6 +28,7 @@
     selectedLocalPath: "/main.py",
     activeEditorPath: "/main.py",
     selectedPicoPath: "",
+    contextTarget: null,
     openFolders: new Set(["/"]),
     blocklyWorkspace: null,
     picoEntries: [],
@@ -66,6 +67,9 @@
     codeHighlight: document.getElementById("codeHighlight"),
     pythonEditor: document.getElementById("pythonEditor"),
     consoleOutput: document.getElementById("consoleOutput"),
+    consoleForm: document.getElementById("consoleForm"),
+    consoleInput: document.getElementById("consoleInput"),
+    contextMenu: document.getElementById("contextMenu"),
     boardSelect: document.getElementById("boardSelect"),
     firmwareVersionInput: document.getElementById("firmwareVersionInput"),
     firmwareUrlInput: document.getElementById("firmwareUrlInput"),
@@ -76,7 +80,9 @@
     showCodeTab: document.getElementById("showCodeTab"),
     refreshPortsButton: document.getElementById("refreshPortsButton"),
     uploadDeviceButton: document.getElementById("uploadDeviceButton"),
-    syncLibrariesButton: document.getElementById("syncLibrariesButton")
+    syncLibrariesButton: document.getElementById("syncLibrariesButton"),
+    openFirmwareLinkButton: document.getElementById("openFirmwareLinkButton"),
+    factoryResetButton: document.getElementById("factoryResetButton")
   };
 
   document.addEventListener("DOMContentLoaded", init);
@@ -283,6 +289,8 @@
     document.getElementById("deleteLocalButton").addEventListener("click", deleteLocalEntry);
     document.getElementById("downloadFirmwareButton").addEventListener("click", downloadFirmware);
     document.getElementById("saveFirmwarePresetButton").addEventListener("click", saveFirmwarePreset);
+    el.openFirmwareLinkButton.addEventListener("click", openFirmwareLink);
+    el.factoryResetButton.addEventListener("click", factoryResetPico);
     document.getElementById("connectButton").addEventListener("click", connectPico);
     document.getElementById("disconnectButton").addEventListener("click", disconnectPico);
     document.getElementById("runOnPicoButton").addEventListener("click", runOnPico);
@@ -293,6 +301,7 @@
     document.getElementById("deletePicoButton").addEventListener("click", deletePicoEntry);
     document.getElementById("newPicoFolderButton").addEventListener("click", createPicoFolder);
     document.getElementById("clearConsoleButton").addEventListener("click", () => { el.consoleOutput.textContent = ""; });
+    el.consoleForm.addEventListener("submit", sendConsoleInput);
     el.refreshPortsButton.addEventListener("click", refreshSerialPorts);
     el.refreshArduinoBoardsButton.addEventListener("click", () => renderArduinoStatus(true));
     el.arduinoBoardSearchInput.addEventListener("input", renderArduinoBoardList);
@@ -303,6 +312,8 @@
     el.showBlocksTab.addEventListener("click", () => showTab("blocks"));
     el.showCodeTab.addEventListener("click", () => showTab("code"));
     document.addEventListener("click", closeMenusOnOutsideClick);
+    document.addEventListener("click", hideContextMenu);
+    el.contextMenu.addEventListener("click", handleContextMenuAction);
     if (navigator.serial) {
       navigator.serial.addEventListener("connect", refreshSerialPorts);
       navigator.serial.addEventListener("disconnect", refreshSerialPorts);
@@ -350,6 +361,36 @@
     document.querySelectorAll(".menu[open]").forEach((menu) => {
       if (!menu.contains(event.target)) menu.removeAttribute("open");
     });
+  }
+
+  function showContextMenu(x, y) {
+    el.contextMenu.hidden = false;
+    el.contextMenu.style.left = `${x}px`;
+    el.contextMenu.style.top = `${y}px`;
+  }
+
+  function hideContextMenu(event) {
+    if (!el.contextMenu || el.contextMenu.hidden) return;
+    if (event && el.contextMenu.contains(event.target)) return;
+    el.contextMenu.hidden = true;
+  }
+
+  async function handleContextMenuAction(event) {
+    const action = event.target?.dataset?.action;
+    if (!action || !state.contextTarget) return;
+    event.preventDefault();
+    const target = state.contextTarget;
+    el.contextMenu.hidden = true;
+    if (target.scope === "local") {
+      state.selectedLocalPath = target.path;
+      if (action === "rename") renameLocalEntry();
+      if (action === "delete") deleteLocalEntry();
+      return;
+    }
+    state.selectedPicoPath = target.path;
+    renderPicoTree();
+    if (action === "rename") await renamePicoEntry();
+    if (action === "delete") await deletePicoEntry();
   }
 
   function showTab(kind) {
@@ -601,6 +642,13 @@
           state.activeEditorPath = path;
         }
         renderAll();
+      });
+      button.addEventListener("contextmenu", (event) => {
+        event.preventDefault();
+        state.selectedLocalPath = path;
+        state.contextTarget = { scope: "local", path };
+        renderLocalTree();
+        showContextMenu(event.clientX, event.clientY);
       });
       fragment.appendChild(button);
       if (node.type === "folder" && state.openFolders.has(path)) fragment.appendChild(renderFolderEntries(node, path));
@@ -946,6 +994,22 @@
     window.open(url, "_blank", "noopener");
   }
 
+  function firmwareUrlForBoard(board) {
+    return {
+      "Pico": "https://micropython.org/download/RPI_PICO/RPI_PICO-latest.uf2",
+      "Pico W": "https://micropython.org/download/RPI_PICO_W/RPI_PICO_W-latest.uf2",
+      "Pico 2": "https://micropython.org/download/RPI_PICO2/RPI_PICO2-latest.uf2",
+      "Pico 2 W": "https://micropython.org/download/RPI_PICO2_W/RPI_PICO2_W-latest.uf2"
+    }[board] || "https://micropython.org/download/RPI_PICO/RPI_PICO-latest.uf2";
+  }
+
+  function openFirmwareLink() {
+    const url = firmwareUrlForBoard(el.boardSelect.value);
+    el.firmwareUrlInput.value = url;
+    el.firmwareVersionInput.value = "MicroPython latest";
+    window.open(url, "_blank", "noopener");
+  }
+
   async function renderArduinoStatus() {
     try {
       const status = await apiGet("/api/arduino/status");
@@ -1256,10 +1320,67 @@
     el.consoleOutput.scrollTop = el.consoleOutput.scrollHeight;
   }
 
+  async function sendConsoleInput(event) {
+    event.preventDefault();
+    const command = el.consoleInput.value.trim();
+    if (!command) return;
+    el.consoleInput.value = "";
+    log(`>>> ${command}`);
+    if (!state.pico.connected) {
+      log("Pico가 연결되어 있지 않습니다.");
+      return;
+    }
+    try {
+      const output = await rawExec(command);
+      log(cleanPicoOutput(output) || "완료");
+    } catch (error) {
+      log(`콘솔 명령 실패: ${error.message}`);
+    }
+  }
+
+  function resetChallengeText() {
+    return Math.random().toString(36).slice(2, 8).toUpperCase();
+  }
+
+  async function factoryResetPico() {
+    if (!state.pico.connected) return alert("먼저 Pico를 연결해주세요.");
+    const challenge = resetChallengeText();
+    const typed = prompt(`Pico 내부 파일을 모두 삭제합니다. 계속하려면 ${challenge} 를 그대로 입력하세요.`);
+    if (typed !== challenge) {
+      alert("확인 문자가 일치하지 않아 공장 초기화를 취소했습니다.");
+      return;
+    }
+    try {
+      const output = await rawExec([
+        "import os",
+        "def rm(path):",
+        "    try:",
+        "        mode = os.stat(path)[0]",
+        "        if mode & 0x4000:",
+        "            for name in os.listdir(path):",
+        "                rm(path + '/' + name if path != '/' else '/' + name)",
+        "            if path != '/':",
+        "                os.rmdir(path)",
+        "        else:",
+        "            os.remove(path)",
+        "    except OSError as exc:",
+        "        print('skip:' + path + ':' + str(exc))",
+        "for name in os.listdir('/'):",
+        "    rm('/' + name)",
+        "print('factory-reset:done')"
+      ].join("\n"));
+      state.picoEntries = [];
+      renderPicoTree();
+      log(cleanPicoOutput(output) || "공장 초기화 완료");
+    } catch (error) {
+      log(`공장 초기화 실패: ${error.message}`);
+    }
+  }
+
   async function connectPico() {
     if (!navigator.serial) return alert("Web Serial API를 지원하는 Chromium 브라우저가 필요합니다.");
     try {
-      state.pico.port = await navigator.serial.requestPort({ filters: PICO_USB_FILTERS });
+      state.pico.port = await navigator.serial.requestPort();
       state.pico.info = state.pico.port.getInfo ? state.pico.port.getInfo() : null;
       await state.pico.port.open({ baudRate: 115200 });
 
@@ -1398,6 +1519,13 @@
         state.selectedPicoPath = entry.path;
         renderPicoTree();
       });
+      button.addEventListener("contextmenu", (event) => {
+        event.preventDefault();
+        state.selectedPicoPath = entry.path;
+        state.contextTarget = { scope: "pico", path: entry.path };
+        renderPicoTree();
+        showContextMenu(event.clientX, event.clientY);
+      });
       el.picoTree.appendChild(button);
     });
   }
@@ -1483,7 +1611,19 @@
     if (!target) return;
     if (!confirm(`${target} 을(를) Pico에서 삭제할까요?`)) return;
     try {
-      const output = await rawExec(["import os", `os.remove(${pyString(target)})`, `print('deleted:${target}')`].join("\n"));
+      const output = await rawExec([
+        "import os",
+        "def rm(path):",
+        "    mode = os.stat(path)[0]",
+        "    if mode & 0x4000:",
+        "        for name in os.listdir(path):",
+        "            rm(path + '/' + name)",
+        "        os.rmdir(path)",
+        "    else:",
+        "        os.remove(path)",
+        `rm(${pyString(target)})`,
+        `print('deleted:${target}')`
+      ].join("\n"));
       log(cleanPicoOutput(output) || "삭제 완료");
       await refreshPicoFiles();
     } catch (error) {
@@ -1519,7 +1659,7 @@
     }
 
     try {
-      state.pico.port = await navigator.serial.requestPort({ filters: PICO_USB_FILTERS });
+      state.pico.port = await navigator.serial.requestPort();
       state.pico.info = state.pico.port.getInfo ? state.pico.port.getInfo() : null;
       await state.pico.port.open({ baudRate: 115200 });
 
